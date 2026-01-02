@@ -32,7 +32,7 @@ class IMU:
             accel_true_body + self.ba + np.random.randn(2) * self.accel_noise_std
         )
 
-        return omega_true, omega_meas, accel_true_body, accel_meas
+        return omega_meas, accel_meas
 
 
 if __name__ == "__main__":
