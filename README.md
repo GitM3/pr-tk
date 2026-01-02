@@ -42,5 +42,5 @@ $$
 - Constant bias for now, adding random walk later.
 ### Output
 - Circular trajectory:
-![[figures/noisy_imu.png]]
+![Noisy IMU plot](figures/noisy_imu.png)
 
