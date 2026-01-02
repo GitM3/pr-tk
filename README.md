@@ -43,6 +43,7 @@ $$
 ### Output
 - Circular trajectory:
 ![Noisy IMU plot](figures/noisy_imu.png)
+
 ## Inverted Pendulum
 - [Derivation Reference](https://www.youtube.com/watch?v=iR-Ju4rwta4)
 $$
@@ -52,3 +53,88 @@ Using RK4 numerical integration for forward dynamics. [Runge-Kutta](https://lpsa
 ### Output 
 
 ![Pendulum dynamics plot](figures/ip_forward.png)
+
+## Models
+
+State and input:
+
+$$
+\mathbf{x} = \begin{bmatrix} x & \dot{x} & \theta & \dot{\theta} & b_g & b_{ax} & b_{ay} \end{bmatrix}^\top, \quad u \in \mathbb{R}.
+$$
+
+Continuous dynamics from the simulator (cart mass $M$, pole mass $m$, length $L$, gravity $g$):
+
+$$
+\dot{\mathbf{x}} = \mathbf{f}_c(\mathbf{x}, u) = \begin{bmatrix}
+\dot{x} \\
+\ddot{x}(\mathbf{x}, u) \\
+\dot{\theta} \\
+\ddot{\theta}(\mathbf{x}, u) \\
+\dot{b}_g \\
+\dot{b}_{ax} \\
+\dot{b}_{ay}
+\end{bmatrix}, \quad \text{with }\dot{b}_g=\dot{b}_{ax}=\dot{b}_{ay}=0 \text{ (random walk in discrete time)}.
+$$
+
+Numerically integrate with RK4 to obtain the discrete transition:
+
+$$
+\mathbf{x}_{k+1} = \mathbf{f}(\mathbf{x}_k, u_k) \approx \begin{bmatrix}\mathrm{RK4}\big(\mathbf{f}_c^{(4)},\, \mathbf{x}^{(4)}_k,\, u_k,\, \Delta t\big) \\ b_{g,k} \\ b_{ax,k} \\ b_{ay,k}\end{bmatrix},
+$$
+where $\mathbf{f}_c^{(4)}$ is the cart-pendulum dynamics on $\mathbf{x}^{(4)}=[x,\dot{x},\theta,\dot{\theta}]^\top$, while biases are held constant between steps (random-walk process noise is added through $\mathbf{R}_t$ on the bias subspace). TODO: Check this.
+
+IMU at the tip measures angular rate and specific force in the body frame. Let the tip world acceleration be $\mathbf{a}^W$ and gravity be $\mathbf{g}^W = [0,\; -g]^\top$. The body-frame specific force is
+
+$$
+\mathbf{a}^B = R(\theta)^\top\big(\mathbf{a}^W - \mathbf{g}^W\big),\quad R(\theta)=\begin{bmatrix}\cos\theta & -\sin\theta\\ \sin\theta & \cos\theta\end{bmatrix}.
+$$
+
+The tip acceleration is computed:
+
+$$
+\mathbf{v}_\text{tip} = \begin{bmatrix}\dot{x} + L\cos\theta\,\dot{\theta} \\ -L\sin\theta\,\dot{\theta}\end{bmatrix},\quad
+\mathbf{a}_\text{tip} = \begin{bmatrix}\ddot{x} - L\sin\theta\,\dot{\theta}^2 + L\cos\theta\,\ddot{\theta} \\ -L\cos\theta\,\dot{\theta}^2 - L\sin\theta\,\ddot{\theta}\end{bmatrix}.
+$$
+
+The measurement model is
+
+$$
+\mathbf{z}_k = \mathbf{h}(\mathbf{x}_k, u_k) + \mathbf{v}_k,\quad
+\mathbf{h}(\mathbf{x},u) = \begin{bmatrix} \dot{\theta} + b_g \\ a_x^B + b_{ax} \\ a_y^B + b_{ay} \end{bmatrix} = \begin{bmatrix} \dot{\theta} + b_g \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax} \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_y + b_{ay} \end{bmatrix}.
+$$
+
+Process and measurement noises are modeled Gaussian:
+
+$$
+\mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_t),\quad \mathbf{v}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_t),
+$$
+with $\mathbf{R}_t=\operatorname{diag}(q_x, q_{\dot{x}}, q_\theta, q_{\dot{\theta}}, q_{b_g}, q_{b_{ax}}, q_{b_{ay}})$ and $\mathbf{Q}_t=\operatorname{diag}(\sigma_\omega^2,\sigma_a^2,\sigma_a^2)$. For now, setting $\mathbf{Q}_t$ from the IMU noise and choose $\mathbf{R}_t$ to capture unmodeled effects.
+
+## EKF with Numerical Linearization
+- Reference: Probabilistic Robotics.
+
+At time $t$, given estimate $(\mu_{t-1}, \Sigma_{t-1})$, input $u_t$, and measurement $z_t$:
+
+Prediction (motion update)
+
+$$
+\bar{\mu}_t=g(u_t, \mu_{t-1}),\quad
+G_t = \left.\frac{\partial g}{\partial x}\right|_{\mu_{t-1},u_t},\quad
+\bar{\Sigma}_t = G_t\,\Sigma_{t-1}\,G_t^T + R_t.
+$$
+
+Update (measurement update)
+
+$$
+H_t = \left.\frac{\partial h}{\partial x}\right|_{\bar{\mu}_t,u_t},\quad
+K_t=\bar{\Sigma}_t H_t^T(H_t \bar{\Sigma}_t H_t^T + Q_t)^{-1},\quad
+\mu_t=\bar{\mu}_t+K_t(z_t-h(\bar{\mu}_t,u_t)),\quad
+\Sigma_t=(I-K_t H_t)\,\bar{\Sigma}_t.
+$$
+
+Numerical Jacobians are computed by central differences with a small $\epsilon$:
+
+$$
+G_t[:,i] \approx \frac{g(\mu_{t-1} + \epsilon\,\mathbf{e}_i, u_t) - g(\mu_{t-1} - \epsilon\,\mathbf{e}_i, u_t)}{2\epsilon},\quad
+H_t[:,i] \approx \frac{h(\bar{\mu}_t + \epsilon\,\mathbf{e}_i, u_t) - h(\bar{\mu}_t - \epsilon\,\mathbf{e}_i, u_t)}{2\epsilon}.
+$$
