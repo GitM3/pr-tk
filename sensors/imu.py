@@ -21,16 +21,18 @@ class IMU:
         self.ba = accel_bias
         self.gyro_noise_std = gyro_noise_std
         self.accel_noise_std = accel_noise_std
-        self.g_world = np.array([0.0, gravity])
+        self.g_world = np.array([0.0, -1 * gravity])
 
-    def measure(self, v_k, theta_k, v_kp1, theta_kp1, dt):
-        omega_true = (theta_kp1 - theta_k) / dt
+    def measure(self, theta, theta_dot, a_world):
+        omega_true = theta_dot
         omega_meas = omega_true + self.bg + np.random.randn() * self.gyro_noise_std
 
-        a_world = (v_kp1 - v_k) / dt
-        accel_body = rot2d(theta_k).T @ (a_world - self.g_world)
-        accel_meas = accel_body + self.ba + np.random.randn(2) * self.accel_noise_std
-        return omega_true, omega_meas, accel_body, accel_meas
+        accel_true_body = rot2d(theta).T @ (a_world - self.g_world)
+        accel_meas = (
+            accel_true_body + self.ba + np.random.randn(2) * self.accel_noise_std
+        )
+
+        return omega_true, omega_meas, accel_true_body, accel_meas
 
 
 if __name__ == "__main__":
@@ -39,18 +41,16 @@ if __name__ == "__main__":
     N = int(T / dt)
     t = np.linspace(0, T, N)
 
-    # Trajectory
-    radius = 5.0
-    speed = 1.0
-    omega = speed / radius  # rad/s
+    R = 5.0
+    omega = 0.5  # rad/s
 
     theta = omega * t
-    vx = -speed * np.sin(theta)
-    vy = speed * np.cos(theta)
+    theta_dot = np.full_like(t, omega)
 
-    v = np.stack([vx, vy], axis=1)
+    a_world = np.zeros((N, 2))
+    a_world[:, 0] = -R * omega**2 * np.cos(theta)
+    a_world[:, 1] = -R * omega**2 * np.sin(theta)
 
-    # SIM
     imu = IMU()
 
     omega_true_log = []
@@ -58,9 +58,11 @@ if __name__ == "__main__":
     acc_true_log = []
     acc_meas_log = []
 
-    for k in range(N - 1):
+    for k in range(N):
         omega_t, omega_m, acc_t, acc_m = imu.measure(
-            v[k], theta[k], v[k + 1], theta[k + 1], dt
+            theta=theta[k],
+            theta_dot=theta_dot[k],
+            a_world=a_world[k],
         )
 
         omega_true_log.append(omega_t)
@@ -76,22 +78,22 @@ if __name__ == "__main__":
     plt.figure(figsize=(12, 8))
 
     plt.subplot(3, 1, 1)
-    plt.plot(t[:-1], omega_true_log, label="Gyro Ground Truth")
-    plt.plot(t[:-1], omega_meas_log, label="Gyro Measured", alpha=0.7)
+    plt.plot(t, omega_true_log, label="Gyro Ground Truth")
+    plt.plot(t, omega_meas_log, label="Gyro Measured", alpha=0.7)
     plt.ylabel("Angular Rate [rad/s]")
     plt.legend()
     plt.grid(True)
 
     plt.subplot(3, 1, 2)
-    plt.plot(t[:-1], acc_true_log[:, 0], label="Accel X Ground Truth")
-    plt.plot(t[:-1], acc_meas_log[:, 0], label="Accel X Measured", alpha=0.7)
+    plt.plot(t, acc_true_log[:, 0], label="Accel X Ground Truth")
+    plt.plot(t, acc_meas_log[:, 0], label="Accel X Measured", alpha=0.7)
     plt.ylabel("Accel X [m/s²]")
     plt.legend()
     plt.grid(True)
 
     plt.subplot(3, 1, 3)
-    plt.plot(t[:-1], acc_true_log[:, 1], label="Accel Y Ground Truth")
-    plt.plot(t[:-1], acc_meas_log[:, 1], label="Accel Y Measured", alpha=0.7)
+    plt.plot(t, acc_true_log[:, 1], label="Accel Y Ground Truth")
+    plt.plot(t, acc_meas_log[:, 1], label="Accel Y Measured", alpha=0.7)
     plt.xlabel("Time [s]")
     plt.ylabel("Accel Y [m/s²]")
     plt.legend()
