@@ -13,9 +13,7 @@ class EKF:
         eps_jac=1e-6,
     ):
         """
-        Extended Kalman Filter (Probabilistic Robotics notation) with numerical Jacobians.
-
-        g_motion(mu, u): returns next state (discrete motion model)
+        g_motion(mu, u): returns next state
         h_meas(mu, u): returns measurement prediction
         R_t: process (motion) noise covariance (state_dim x state_dim)
         Q_t: measurement noise covariance (meas_dim x meas_dim)

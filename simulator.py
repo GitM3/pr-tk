@@ -1,5 +1,6 @@
 import numpy as np
 
+from controller.lqr import LQRController
 from dynamics.inverted_pendulum import InvertedPendulumCart
 from estimation.ekf import EKF
 from plotting.plotting import (
@@ -60,13 +61,8 @@ def simulate_with_imu(system, imu, x0, T, dt, controller=None):
         u = controller(x, time[k]) if controller else 0.0
         state_hist[k] = x
 
-        # Use current state's accelerations from dynamics
         x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(x, u)
-
-        # Tip kinematics
         v_tip, a_tip = system.tip_kinematics(x, x_ddot, theta_ddot)
-
-        # IMU measurement at the tip
         theta = x[2]
         omega_meas, acc_meas = imu.measure(
             theta=theta, theta_dot=theta_dot, a_world=a_tip
@@ -92,52 +88,50 @@ def simulate_with_imu(system, imu, x0, T, dt, controller=None):
     )
 
 
+def f_disc(x, u):
+    # State: [x, x_dot, theta, theta_dot, b_g, b_ax, b_ay]
+    s = x[:4]
+    b = x[4:]
+    s_next = rk4_step(system.dynamics, s, u, dt)
+    return np.hstack([s_next, b])
+
+
 def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
     N = int(T / dt)
     time = np.linspace(0, T, N)
 
-    # Helper: discrete dynamics via RK4 for EKF (augmented with biases)
-    # State: [x, x_dot, theta, theta_dot, b_g, b_ax, b_ay]
-    def f_disc(x, u):
-        s = x[:4]
-        b = x[4:]
-        s_next = rk4_step(system.dynamics, s, u, dt)
-        return np.hstack([s_next, b])
-
     g_world = imu.g_world
 
-    # Measurement model: [omega, ax_body, ay_body] including biases
     def h_meas(x, u):
+        # Measurement model: [omega, ax_body, ay_body] including biases
         s = x[:4]
         b_g, b_ax, b_ay = x[4:]
-        x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(s, u)
+        x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(
+            s, u
+        )  # TODO: xdot from wheel encoder?
         _, a_tip = system.tip_kinematics(s, x_ddot, theta_ddot)
         theta = s[2]
         acc_body = rot2d(theta).T @ (a_tip - g_world)
         return np.array([theta_dot + b_g, acc_body[0] + b_ax, acc_body[1] + b_ay])
 
-    # Noises
-    R = np.diag([imu.gyro_noise_std**2, imu.accel_noise_std**2, imu.accel_noise_std**2])
+    Q = np.diag([imu.gyro_noise_std**2, imu.accel_noise_std**2, imu.accel_noise_std**2])
     # Process noise for [x, x_dot, theta, theta_dot, b_g, b_ax, b_ay]
-    Q = np.diag([1e-5, 1e-3, 1e-6, 1e-3, 1e-8, 1e-6, 1e-6])
+    R = np.diag([1e-5, 1e-3, 1e-6, 1e-3, 1e-8, 1e-6, 1e-6])
 
     ekf = EKF(
         g_motion=f_disc,
         h_meas=h_meas,
-        R_t=Q,  # process (motion) noise
-        Q_t=R,  # measurement noise
+        R_t=R,
+        Q_t=Q,
         state_dim=7,
         meas_dim=3,
         eps_jac=1e-6,
     )
 
-    # Initial conditions
     x = x0.copy()
-    # Initial estimate includes zero biases (can offset if prior known)
     x_hat = np.hstack([x0.copy(), np.array([0.0, 0.0, 0.0])])
     P = np.diag([1e-2, 1e-1, 1e-3, 1e-1, 1e-2, 1e-1, 1e-1])
 
-    # Logs
     state_hist = np.zeros((N, len(x0)))
     est_hist = np.zeros((N, 7))
     theta_true_log = np.zeros(N)
@@ -152,7 +146,6 @@ def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
         u_hist[k] = u
         state_hist[k] = x
 
-        # True dynamics for measurement synthesis
         x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(x, u)
         _, a_tip = system.tip_kinematics(x, x_ddot, theta_ddot)
 
@@ -193,7 +186,7 @@ def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
 
 if __name__ == "__main__":
     M = 1.0
-    m = 0.2  # TODO: simulate butler bot
+    m = 0.2  # TODO: butler bot params
     L = 0.5
     system = InvertedPendulumCart(M, m, L, B_M=0.5)
     # x  # x_dot  # theta  # theta_dot
@@ -202,6 +195,68 @@ if __name__ == "__main__":
     T = 10.0
     dt = 0.01
 
+    # imu = IMU()
+    # # WITHOUT CONTROLLER:
+    # (
+    #     time,
+    #     state_hist,
+    #     est_hist,
+    #     theta_t,
+    #     theta_m,
+    #     omega_t,
+    #     omega_m,
+    #     acc_t,
+    #     acc_m,
+    #     u_hist,
+    # ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt)
+    #
+    # plot_imu_ekf_vs_truth(
+    #     time=time,
+    #     system=system,
+    #     imu=imu,
+    #     x_true=state_hist,
+    #     x_ekf=est_hist,
+    #     theta_gyro=theta_m,
+    #     omega_meas=omega_m,
+    #     acc_true_body=acc_t,
+    #     acc_meas=acc_m,
+    #     u_hist=u_hist,
+    # )
+    #
+    # plot_imu_ekf_error_overlay(
+    #     time=time,
+    #     system=system,
+    #     imu=imu,
+    #     x_true=state_hist,
+    #     x_ekf=est_hist,
+    #     theta_gyro=theta_m,
+    #     omega_meas=omega_m,
+    #     acc_true_body=acc_t,
+    #     acc_meas=acc_m,
+    #     u_hist=u_hist,
+    # )
+    #
+    # animate_cart_pendulum(
+    #     time,
+    #     state_hist,
+    #     L,
+    #     trace=True,
+    #     trace_length=200,
+    #     state_est_history=est_hist,
+    #     est_trace=True,
+    #     theta_gyro=theta_m,
+    #     gyro_trace=True,
+    # )
+
+    # WITH controller
+    lqr = LQRController(
+        system,
+        Q=np.diag([1.0, 1.0, 10.0, 100.0]),
+        R=np.array([[10.0]]),
+        x_ref=np.array([0.0, 0.0, 0.0, 0.0]),
+        u_limit=50.0,
+        alpha=1.0,
+    )
     imu = IMU()
     (
         time,
@@ -214,7 +269,7 @@ if __name__ == "__main__":
         acc_t,
         acc_m,
         u_hist,
-    ) = simulate_with_imu_and_ekf(system=system, imu=imu, x0=x0, T=T, dt=dt)
+    ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
 
     plot_imu_ekf_vs_truth(
         time=time,

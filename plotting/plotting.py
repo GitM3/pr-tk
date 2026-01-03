@@ -25,8 +25,10 @@ def animate_cart_pendulum(
     if state_est_history is not None:
         x_cart_est = state_est_history[:, 0]
         theta_est = state_est_history[:, 2]
-        pend_x_est = x_cart_est + L * np.sin(theta_est)
+        pend_x_est = x_cart + L * np.sin(theta_est)
         pend_y_est = L * np.cos(theta_est)
+        # pend_x_est = x_cart_est + L * np.sin(theta_est) # TODO: if wheel decoder needed add x_est back
+        # pend_y_est = L * np.cos(theta_est)
     else:
         pend_x_est = pend_y_est = None
 
