@@ -150,12 +150,6 @@ def plot_imu_ekf_vs_truth(
     acc_meas,
     u_hist,
 ):
-    """
-    Combined overlays of Truth vs EKF vs IMU (raw/integrated).
-    Shows theta, theta_dot, and body-frame accelerations.
-    EKF acceleration predictions are computed from x_ekf and u_hist.
-    """
-    # EKF predicted body-frame accelerations using the same model as measurement
     N = len(time)
     acc_ekf = np.zeros_like(acc_true_body)
     for k in range(N):
@@ -258,7 +252,6 @@ def plot_imu_ekf_error_overlay(
     e_ay_ekf = acc_ekf[:, 1] - acc_true_body[:, 1]
     e_ay_imu = acc_meas[:, 1] - acc_true_body[:, 1]
 
-    # Print brief summaries
     print("\nCombined Error Summary (EKF vs IMU)")
     print("-" * 80)
     for err, name in [
@@ -334,3 +327,75 @@ def summarize_error(e, name):
         "Bias(mean)": bias,
         "Std(zero-mean)": std_zeromean,
     }
+
+
+def plot_kalman_gain(
+    time,
+    K_hist,
+    state_labels=None,
+    meas_labels=None,
+    state_rows=None,
+    meas_cols=None,
+):
+    N, n, m = K_hist.shape
+    if state_rows is None:
+        state_rows = list(range(n))
+    if meas_cols is None:
+        meas_cols = list(range(m))
+    if state_labels is None:
+        state_labels = [f"x[{i}]" for i in range(n)]
+    if meas_labels is None:
+        meas_labels = [f"z[{j}]" for j in range(m)]
+
+    cols = len(meas_cols)
+    plt.figure(figsize=(12, max(3, 2.5 * cols)))
+    for idx, j in enumerate(meas_cols, start=1):
+        plt.subplot(cols, 1, idx)
+        for i in state_rows:
+            plt.plot(time, K_hist[:, i, j], label=state_labels[i])
+        plt.title(f"Kalman Gain for measurement: {meas_labels[j]}")
+        plt.ylabel("K entries")
+        plt.grid(True)
+        plt.legend(ncol=4, fontsize=9)
+        if idx == cols:
+            plt.xlabel("Time [s]")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_ekf_statistics(
+    time,
+    P_diag,
+    meas_labels=None,
+    state_labels=None,
+):
+    _, n = P_diag.shape
+    if meas_labels is None:
+        meas_labels = [f"z[{j}]" for j in range(m)]
+    if state_labels is None:
+        state_labels = [f"x[{i}]" for i in range(n)]
+
+    plt.figure(figsize=(12, 12))
+
+    split_idx = 4 if n >= 7 else n // 2
+
+    plt.subplot(2, 1, 1)
+    for i in range(min(split_idx, n)):
+        plt.plot(time, P_diag[:, i], label=state_labels[i])
+    plt.ylabel("Var")
+    plt.title("Covariance diag (dynamics)")
+    plt.grid(True)
+    plt.legend(ncol=4, fontsize=9)
+
+    plt.subplot(2, 1, 2)
+    for i in range(split_idx, n):
+        plt.plot(time, P_diag[:, i], label=state_labels[i])
+    plt.ylabel("Var")
+    plt.title("Covariance diag (bias/others)")
+    plt.grid(True)
+    if n - split_idx > 0:
+        plt.legend(ncol=4, fontsize=9)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()

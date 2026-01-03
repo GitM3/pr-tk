@@ -60,8 +60,9 @@ class EKF:
         z_hat = self.h(mu_bar, u)
         S = H @ Sigma_bar @ H.T + self.Q_t
         K = Sigma_bar @ H.T @ np.linalg.inv(S)
-        mu_new = mu_bar + K @ (z - z_hat)
+        innov = z - z_hat
+        mu_new = mu_bar + K @ innov
         I = np.eye(self.n)
         Sigma_new = (I - K @ H) @ Sigma_bar
 
-        return mu_new, Sigma_new, mu_bar, Sigma_bar
+        return mu_new, Sigma_new, mu_bar, Sigma_bar, K, innov, S
