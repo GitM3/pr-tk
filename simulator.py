@@ -3,9 +3,13 @@ import numpy as np
 from controller.lqr import LQRController
 from dynamics.inverted_pendulum import InvertedPendulumCart
 from estimation.ekf import EKF
-from plotting.plotting import (animate_cart_pendulum, plot_ekf_statistics,
-                               plot_imu_ekf_error_overlay,
-                               plot_imu_ekf_vs_truth, plot_kalman_gain)
+from plotting.plotting import (
+    animate_cart_pendulum,
+    plot_ekf_statistics,
+    plot_imu_ekf_error_overlay,
+    plot_imu_ekf_vs_truth,
+    plot_kalman_gain,
+)
 from sensors.imu import IMU, rot2d
 
 
@@ -217,14 +221,14 @@ if __name__ == "__main__":
     M = 1.0
     m = 0.2  # TODO: butler bot params
     L = 0.5
-    system = InvertedPendulumCart(M, m, L, B_M=0.5)
-    # x  # x_dot  # theta  # theta_dot
-    x0 = np.array([0.0, 0.0, np.deg2rad(10), 0.0])
+    system = InvertedPendulumCart(M, m, L, B_M=0.9, B_m=0.05)
 
-    T = 10.0
+    T = 5.0
     dt = 0.01
 
     # imu = IMU()
+    # x  # x_dot  # theta  # theta_dot
+    # x0 = np.array([0.0, 0.0, np.deg2rad(1), 0.0])
     # # WITHOUT CONTROLLER:
     # (
     #     time,
@@ -343,12 +347,13 @@ if __name__ == "__main__":
     #     est_trace=True,
     # )
 
+    x0 = np.array([0.0, 0.0, np.deg2rad(30), 0])
     imu = IMU()
     lqr = LQRController(
         system,
-        Q=np.diag([1.0, 1.0, 10.0, 100.0]),
+        Q=np.diag([1.0, 1.0, 10.0, 10.0]),
         R=np.array([[10.0]]),
-        x_ref=np.array([0.0, 0.0, 0.0, 0.0]),
+        x_ref=np.array([3.5, 0.0, 0.0, 0.0]),
         u_limit=50.0,
         alpha=1.0,
     )
@@ -366,40 +371,40 @@ if __name__ == "__main__":
         stats,
     ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
 
-    state_labels=["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
-    meas_labels=["omega", "acc_x", "acc_y"]
-    plot_kalman_gain(
-        time,
-        stats["K_hist"],
-        meas_labels=meas_labels,
-        state_labels=state_labels
-    )
-    plot_ekf_statistics(
-        time,
-        P_diag=stats["P_diag_hist"],
-        meas_labels=meas_labels,
-        state_labels=state_labels
-    )
-
-    plot_imu_ekf_error_overlay(
-        time=time,
-        system=system,
-        imu=imu,
-        x_true=state_hist,
-        x_ekf=est_hist,
-        theta_gyro=theta_m,
-        omega_meas=omega_m,
-        acc_true_body=acc_t,
-        acc_meas=acc_m,
-        u_hist=u_hist,
-    )
+    state_labels = ["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
+    meas_labels = ["omega", "acc_x", "acc_y"]
+    # plot_kalman_gain(
+    #     time,
+    #     stats["K_hist"],
+    #     meas_labels=meas_labels,
+    #     state_labels=state_labels
+    # )
+    # plot_ekf_statistics(
+    #     time,
+    #     P_diag=stats["P_diag_hist"],
+    #     meas_labels=meas_labels,
+    #     state_labels=state_labels
+    # )
+    #
+    # plot_imu_ekf_error_overlay(
+    #     time=time,
+    #     system=system,
+    #     imu=imu,
+    #     x_true=state_hist,
+    #     x_ekf=est_hist,
+    #     theta_gyro=theta_m,
+    #     omega_meas=omega_m,
+    #     acc_true_body=acc_t,
+    #     acc_meas=acc_m,
+    #     u_hist=u_hist,
+    # )
 
     animate_cart_pendulum(
         time,
         state_hist,
         L,
         trace=True,
-        trace_length=200,
+        trace_length=100,
         state_est_history=est_hist,
         est_trace=True,
     )

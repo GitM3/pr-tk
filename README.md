@@ -1,9 +1,24 @@
 # 2D Pendulumn balancing using EKF and IMU sensor
+
 ## Motivation
-In another project (Butler-Bot) a bottle should be caught. Next I investigate how to perhaps balance the bottle if the user is especially tipsy!
-To simplify this project, I'll be assuming 2D since this I want to test my application of fundamental concepts rather than complex program.
-## IMU sensor
-- Reference https://arxiv.org/pdf/2307.11758
+In another project [Butler-Bot](https://github.com/GitM3/butler-bot) a bottle catching robot was implemented. Next I investigate how to balance the bottle if the user is especially tipsy! Bottle balancing is often modeled by an inverted pendulum and practically implemented using IMU.
+
+IMU's tend to be noisy and the non-linear dynamics of the system make it suitable for robust estimation using an Extended Kalman Filter.
+## Overview and Results
+The state of the robot is simplified to two dimensions. The IMU can be used to infer the angle of the pendulum which is used to determine the control force $u$.
+
+![](figures/robot.gif)
+
+Altough the focus is on the Kalman Filter implementation the simulation includes the inverted pendulum robot dynamics and a LQR controller to stabilize 
+a theoretical bottle using a noisy IMU mounted on the pendulum tip. The simulation can be run live at this [link](https://probabilisticshukudai.streamlit.app/)!
+
+Compared to naive IMU integration for the state estimate, the EKF reduces RMSE error in state estimation and compensates for accelerometer bias.
+
+![EKF vs Naive Integration](figures/ekf_vs_int.png)
+
+## Details
+### IMU sensor
+- Reference for model: https://arxiv.org/pdf/2307.11758
 Let Ground truth pose be:
 
 $$
@@ -14,7 +29,7 @@ $$
 \theta_k \in \mathbb{R}
 $$
 
-### Gyro Model
+#### Gyro Model
 $\tilde{\omega}=\dot{\theta}_{k}+b_{g}+\eta_{g}$
 	- True velocity + bias + additive, zero-mean Gaussian noise.
 	- Measurement:
@@ -23,7 +38,7 @@ $$
 \tilde{\omega}_k = \frac{\theta_{k+1} - \theta_k}{\Delta t}+b_g+n_g
 $$
 
-### Accelerometers
+#### Accelerometers
 $\tilde{a}=R(\theta^T)(\dot{v}-g^w)+b_{a}+\eta_{a}$
 $g^w=[0,g]$
 
@@ -38,24 +53,20 @@ where
 $$
 \mathbf{a}^W_k=\frac{\mathbf{v}_{k+1} - \mathbf{v}_k}{\Delta t}
 $$
-### Noise
-- Constant bias for now, adding random walk later.
 ### Output
-- Circular trajectory:
+For a test circular trajectory, the ground truth is compared to different noise levels.
 ![Noisy IMU plot](figures/noisy_imu.png)
 
-## Inverted Pendulum
+### Inverted Pendulum
+[](figures/robot.png)
 - [Derivation Reference](https://www.youtube.com/watch?v=iR-Ju4rwta4)
 $$
 \begin{aligned} & \dot{x} =\frac{d x}{d t}=v \\ & \ddot{x}=\frac{d \theta}{d t}=\frac{d^2 x}{d t^2}=\frac{L u+B_m \dot{\theta} \cos (\theta)-m L g \sin (\theta) \cos (\theta)+m L^2 \dot{\theta}^2 \sin (\theta)-B_M L \dot{x}}{L\left(M+m-m \cos ^2(\theta)\right)} \\ & \dot{\theta}=\frac{d \theta}{d t}=\omega \\ & \ddot{\theta}=\frac{d \omega}{d t}=\frac{d^2 \theta}{d t^2}=\frac{-m L \cos (\theta) U-m^2 L^2 \dot{\theta}^2 \sin (\theta) \cos (\theta)+B_M \dot{x} m L \cos (\theta)-(M+m) B_m \dot{\theta}+(M+m) m g L \sin (\theta)}{m L^2\left(M+m-m \cos ^2(\theta)\right)} \end{aligned} 
 $$
 Using RK4 numerical integration for forward dynamics. [Runge-Kutta](https://lpsa.swarthmore.edu/NumInt/NumIntFourth.htm)
-### Output 
-
 ![Pendulum dynamics plot](figures/ip_forward.png)
 
-## Models
-
+### Models
 State and input:
 
 $$
@@ -118,7 +129,7 @@ At time $t$, given estimate $(\mu_{t-1}, \Sigma_{t-1})$, input $u_t$, and measur
 Prediction (motion update)
 
 $$
-\bar{\mu}_t=g(u_t, \mu_{t-1}),\quad
+\bar{\mu}_t=g(u_t, \mu_{t-1}),\quad  
 G_t = \left.\frac{\partial g}{\partial x}\right|_{\mu_{t-1},u_t},\quad
 \bar{\Sigma}_t = G_t\,\Sigma_{t-1}\,G_t^T + R_t.
 $$
@@ -139,8 +150,26 @@ G_t[:,i] \approx \frac{g(\mu_{t-1} + \epsilon\,\mathbf{e}_i, u_t) - g(\mu_{t-1} 
 H_t[:,i] \approx \frac{h(\bar{\mu}_t + \epsilon\,\mathbf{e}_i, u_t) - h(\bar{\mu}_t - \epsilon\,\mathbf{e}_i, u_t)}{2\epsilon}.
 $$
 
-## Output
-![EKF vs Naive Integration](figures/ekf_vs_int.png)
+### EKF Output
+Since there is no observation on the x state (through a wheel encoder), there is no way to improve x estimates and as a result the total state estimate drifts:
 ![](figures/ekf-pendulum.gif)
-- Problem: linearization error.
-- No observation for x, need wheel encoder or something
+
+If motion is aggressive, linearization errors will occur, which is a known limit of the EKF.
+### LQR
+
+- From [example](https://youtu.be/8QlS6L--Hic?si=pDTa_XyIbnLle6FW)
+- LQR.
+- Video has swing up, but I am keeping it simple:
+- Weights used: $Q=\mathrm{diag}(1,\,1,\,10,\,100), R=10$.
+- Continuous-time [solved](https://www.youtube.com/watch?v=ZktL3YjTbB4) and [CARE](https://en.wikipedia.org/wiki/Algebraic_Riccati_equation) in [python](https://python-control.readthedocs.io/en/0.10.2/generated/control.care.html) with their [implementation](https://github.com/python-control/python-control/blob/0.10.2/control/mateqn.py#L397):
+
+$$
+A^\top P + P A - P B R^{-1} B^\top P + Q = 0.
+$$
+
+- Optimal gain and control law (For continuous):
+
+$$
+K = R^{-1} B^\top P,\quad u = -K\,\bigl(x - x_{\mathrm{ref}}\bigr),\quad x_{\mathrm{ref}}=\mathbf{0}.
+$$
+
