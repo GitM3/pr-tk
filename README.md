@@ -138,3 +138,6 @@ $$
 G_t[:,i] \approx \frac{g(\mu_{t-1} + \epsilon\,\mathbf{e}_i, u_t) - g(\mu_{t-1} - \epsilon\,\mathbf{e}_i, u_t)}{2\epsilon},\quad
 H_t[:,i] \approx \frac{h(\bar{\mu}_t + \epsilon\,\mathbf{e}_i, u_t) - h(\bar{\mu}_t - \epsilon\,\mathbf{e}_i, u_t)}{2\epsilon}.
 $$
+
+## Output
+![EKF vs Naive Integration](figures/ekf_vs_int.png)
