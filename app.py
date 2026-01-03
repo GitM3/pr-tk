@@ -8,6 +8,12 @@ import simulator as sim
 from controller.lqr import LQRController
 from dynamics.inverted_pendulum import InvertedPendulumCart
 from sensors.imu import IMU
+from plotting.plotting import (
+    plot_imu_ekf_vs_truth,
+    plot_imu_ekf_error_overlay,
+    plot_kalman_gain,
+    plot_ekf_statistics,
+)
 
 
 def build_animation_html(
@@ -108,42 +114,68 @@ def main():
     st.set_page_config(page_title="Cart-Pendulum Simulator", layout="wide")
     st.title("Interactive Cart-Pendulum Simulator")
 
-    with st.sidebar:
-        st.header("Setup")
+    st.header("Parameters")
+    with st.form(key="params_form"):
         st.subheader("System")
-        M = st.number_input("Cart mass M", value=1.0, step=0.1)
-        m = st.number_input("Pendulum mass m", value=0.2, step=0.05)
-        L = st.number_input("Pendulum length L", value=0.5, step=0.1)
-        B_M = st.number_input("Cart damping B_M", value=0.5, step=0.1)
-        B_m = st.number_input("Pendulum damping B_m", value=0.01, step=0.01, format="%.3f")
+        cols1 = st.columns(4)
+        with cols1[0]:
+            M = st.number_input("Cart mass M", value=1.0, step=0.1)
+        with cols1[1]:
+            m = st.number_input("Pendulum mass m", value=0.2, step=0.05)
+        with cols1[2]:
+            L = st.number_input("Pendulum length L", value=0.5, step=0.1)
+        with cols1[3]:
+            gravity = st.number_input("Gravity g [m/s^2]", value=9.81, format="%.2f")
+
+        cols2 = st.columns(2)
+        with cols2[0]:
+            B_M = st.number_input("Cart damping B_M", value=0.5, step=0.1)
+        with cols2[1]:
+            B_m = st.number_input("Pendulum damping B_m", value=0.01, step=0.01, format="%.3f")
 
         st.subheader("Initial State")
-        x0_x = st.number_input("x [m]", value=0.0)
-        x0_xdot = st.number_input("x_dot [m/s]", value=0.0)
-        x0_theta_deg = st.number_input("theta [deg]", value=10.0)
-        x0_thetadot = st.number_input("theta_dot [rad/s]", value=0.0)
+        cols3 = st.columns(4)
+        with cols3[0]:
+            x0_x = st.number_input("x [m]", value=0.0)
+        with cols3[1]:
+            x0_xdot = st.number_input("x_dot [m/s]", value=0.0)
+        with cols3[2]:
+            x0_theta_deg = st.number_input("theta [deg]", value=10.0)
+        with cols3[3]:
+            x0_thetadot = st.number_input("theta_dot [rad/s]", value=0.0)
 
         st.subheader("Simulation")
-        T = st.number_input("Duration T [s]", value=10.0, step=1.0)
-        dt = st.number_input("Time step dt [s]", value=0.01, step=0.005, format="%.3f")
+        cols4 = st.columns(2)
+        with cols4[0]:
+            T = st.number_input("Duration T [s]", value=10.0, step=1.0)
+        with cols4[1]:
+            dt = st.number_input("Time step dt [s]", value=0.01, step=0.005, format="%.3f")
 
         st.subheader("IMU Noise")
-        gyro_bias = st.number_input("Gyro bias [rad/s]", value=0.02, format="%.4f")
-        accel_bias_x = st.number_input("Accel bias X [m/s^2]", value=0.10, format="%.3f")
-        accel_bias_y = st.number_input("Accel bias Y [m/s^2]", value=-0.05, format="%.3f")
-        gyro_noise_std = st.number_input("Gyro noise std [rad/s]", value=0.01, format="%.4f")
-        accel_noise_std = st.number_input("Accel noise std [m/s^2]", value=0.10, format="%.3f")
+        cols5 = st.columns(3)
+        with cols5[0]:
+            gyro_bias = st.number_input("Gyro bias [rad/s]", value=0.02, format="%.4f")
+            gyro_noise_std = st.number_input("Gyro noise std [rad/s]", value=0.01, format="%.4f")
+        with cols5[1]:
+            accel_bias_x = st.number_input("Accel bias X [m/s^2]", value=0.10, format="%.3f")
+            accel_noise_std = st.number_input("Accel noise std [m/s^2]", value=0.10, format="%.3f")
+        with cols5[2]:
+            accel_bias_y = st.number_input("Accel bias Y [m/s^2]", value=-0.05, format="%.3f")
 
-        st.subheader("Controller")
-        use_lqr = st.checkbox("Use LQR controller", value=True)
-        u_limit = st.number_input("u_limit (saturation)", value=50.0, step=5.0)
-        alpha = st.number_input("alpha (linearization)", value=1.0, step=0.1)
+        st.subheader("Controller & Estimator")
+        cols6 = st.columns(3)
+        with cols6[0]:
+            use_lqr = st.checkbox("Use LQR", value=True)
+        with cols6[1]:
+            u_limit = st.number_input("u_limit (saturation)", value=50.0, step=5.0)
+        with cols6[2]:
+            alpha = st.number_input("alpha (linearization)", value=1.0, step=0.1)
 
         use_ekf = st.checkbox("Use EKF (estimation)", value=True)
 
-        play = st.button("Play")
+        submitted = st.form_submit_button("Play")
 
-    system = InvertedPendulumCart(M, m, L,B_M=B_M, B_m=B_m)
+    system = InvertedPendulumCart(M, m, L, g=gravity, B_M=B_M, B_m=B_m)
     controller = None
     if use_lqr:
         controller = LQRController(
@@ -160,11 +192,13 @@ def main():
         accel_bias=np.array([accel_bias_x, accel_bias_y]),
         gyro_noise_std=gyro_noise_std,
         accel_noise_std=accel_noise_std,
+        gravity=gravity,
     )
 
     # Simulate on click
-    if play:
+    if submitted:
         x0 = np.array([x0_x, x0_xdot, np.deg2rad(x0_theta_deg), x0_thetadot])
+
         if use_ekf:
             # Set globals used by sim.f_disc inside simulate_with_imu_and_ekf
             sim.system = system
@@ -181,7 +215,14 @@ def main():
                 acc_m,
                 u_hist,
                 stats,
-            ) = sim.simulate_with_imu_and_ekf(system, imu, x0, float(T), float(dt), controller=controller)
+            ) = sim.simulate_with_imu_and_ekf(
+                system,
+                imu,
+                x0,
+                float(T),
+                float(dt),
+                controller=controller,
+            )
         else:
             (
                 time,
@@ -194,13 +235,75 @@ def main():
                 acc_t,
                 acc_m,
                 u_hist,
-            ) = sim.simulate_with_imu(system, imu, x0, float(T), float(dt), controller=controller)
+            ) = sim.simulate_with_imu(
+                system,
+                imu,
+                x0,
+                float(T),
+                float(dt),
+                controller=controller,
+            )
 
-        anim_html = build_animation_html(time, state_hist, L, state_est_history=est_hist)
+        with st.spinner("Building animation..."):
+            anim_html = build_animation_html(time, state_hist, L, state_est_history=est_hist)
         st.subheader("Animation")
         st_html(anim_html, height=420)
+
+        if use_ekf:
+            st.subheader("EKF vs Truth")
+            fig1 = plot_imu_ekf_vs_truth(
+                time=time,
+                system=system,
+                imu=imu,
+                x_true=state_hist,
+                x_ekf=est_hist,
+                theta_gyro=theta_m,
+                omega_meas=omega_m,
+                acc_true_body=acc_t,
+                acc_meas=acc_m,
+                u_hist=u_hist,
+                return_fig=True,
+            )
+            st.pyplot(fig1)
+
+            st.subheader("EKF Error Overlay")
+            fig2 = plot_imu_ekf_error_overlay(
+                time=time,
+                system=system,
+                imu=imu,
+                x_true=state_hist,
+                x_ekf=est_hist,
+                theta_gyro=theta_m,
+                omega_meas=omega_m,
+                acc_true_body=acc_t,
+                acc_meas=acc_m,
+                u_hist=u_hist,
+                return_fig=True,
+            )
+            st.pyplot(fig2)
+
+            st.subheader("Kalman Gain")
+            state_labels = ["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
+            meas_labels = ["omega", "acc_x", "acc_y"]
+            fig3 = plot_kalman_gain(
+                time=time,
+                K_hist=stats["K_hist"],
+                meas_labels=meas_labels,
+                state_labels=state_labels,
+                return_fig=True,
+            )
+            st.pyplot(fig3)
+
+            st.subheader("EKF Covariance Diagonal")
+            fig4 = plot_ekf_statistics(
+                time=time,
+                P_diag=stats["P_diag_hist"],
+                meas_labels=meas_labels,
+                state_labels=state_labels,
+                return_fig=True,
+            )
+            st.pyplot(fig4)
 
 
 if __name__ == "__main__":
     main()
-

@@ -149,6 +149,7 @@ def plot_imu_ekf_vs_truth(
     acc_true_body,
     acc_meas,
     u_hist,
+    return_fig: bool = False,
 ):
     N = len(time)
     acc_ekf = np.zeros_like(acc_true_body)
@@ -161,7 +162,7 @@ def plot_imu_ekf_vs_truth(
         theta = s[2]
         acc_ekf[k] = rot2d(theta).T @ (a_tip - imu.g_world)
 
-    plt.figure(figsize=(12, 12))
+    fig = plt.figure(figsize=(12, 12))
 
     # Angle
     plt.subplot(4, 1, 1)
@@ -202,6 +203,8 @@ def plot_imu_ekf_vs_truth(
     plt.legend()
 
     plt.tight_layout()
+    if return_fig:
+        return fig
     plt.show()
 
 
@@ -217,6 +220,7 @@ def plot_imu_ekf_error_overlay(
     acc_meas,
     u_hist,
     angle_wrap=True,
+    return_fig: bool = False,
 ):
     """
     Overlay error plots: EKF vs IMU errors on same axes.
@@ -272,7 +276,7 @@ def plot_imu_ekf_error_overlay(
     print("-" * 80)
 
     # Plots
-    plt.figure(figsize=(12, 10))
+    fig = plt.figure(figsize=(12, 10))
 
     plt.subplot(4, 1, 1)
     plt.plot(time, e_theta_ekf, label="EKF theta error")
@@ -308,6 +312,8 @@ def plot_imu_ekf_error_overlay(
     plt.legend()
 
     plt.tight_layout()
+    if return_fig:
+        return fig
     plt.show()
 
 
@@ -336,6 +342,7 @@ def plot_kalman_gain(
     meas_labels=None,
     state_rows=None,
     meas_cols=None,
+    return_fig: bool = False,
 ):
     N, n, m = K_hist.shape
     if state_rows is None:
@@ -348,7 +355,7 @@ def plot_kalman_gain(
         meas_labels = [f"z[{j}]" for j in range(m)]
 
     cols = len(meas_cols)
-    plt.figure(figsize=(12, max(3, 2.5 * cols)))
+    fig = plt.figure(figsize=(12, max(3, 2.5 * cols)))
     for idx, j in enumerate(meas_cols, start=1):
         plt.subplot(cols, 1, idx)
         for i in state_rows:
@@ -360,6 +367,8 @@ def plot_kalman_gain(
         if idx == cols:
             plt.xlabel("Time [s]")
     plt.tight_layout()
+    if return_fig:
+        return fig
     plt.show()
 
 
@@ -368,6 +377,7 @@ def plot_ekf_statistics(
     P_diag,
     meas_labels=None,
     state_labels=None,
+    return_fig: bool = False,
 ):
     _, n = P_diag.shape
     if meas_labels is None:
@@ -375,7 +385,7 @@ def plot_ekf_statistics(
     if state_labels is None:
         state_labels = [f"x[{i}]" for i in range(n)]
 
-    plt.figure(figsize=(12, 12))
+    fig = plt.figure(figsize=(12, 12))
 
     split_idx = 4 if n >= 7 else n // 2
 
@@ -398,4 +408,6 @@ def plot_ekf_statistics(
     plt.legend()
 
     plt.tight_layout()
+    if return_fig:
+        return fig
     plt.show()

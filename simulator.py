@@ -42,7 +42,7 @@ def integrate_gyro(omega_meas, theta0, dt):
     return theta_imu
 
 
-def simulate_with_imu(system, imu, x0, T, dt, controller=None):
+def simulate_with_imu(system, imu, x0, T, dt, controller=None, progress=None):
     N = int(T / dt)
     time = np.linspace(0, T, N)
 
@@ -75,6 +75,11 @@ def simulate_with_imu(system, imu, x0, T, dt, controller=None):
 
         # Integrate plant forward
         x = rk4_step(system.dynamics, x, u, dt)
+        if progress is not None:
+            try:
+                progress(k + 1, N)
+            except Exception:
+                pass
     theta_meas_log = integrate_gyro(omega_meas_log, theta_true_log[0], dt)
     theta_meas = theta_meas_log.reshape(-1, 1)
     x_meas = np.zeros(N).reshape(-1, 1)  # X not measured
@@ -102,7 +107,7 @@ def f_disc(x, u):
     return np.hstack([s_next, b])
 
 
-def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
+def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None, progress=None):
     N = int(T / dt)
     time = np.linspace(0, T, N)
 
@@ -180,6 +185,11 @@ def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
 
         # plant forward
         x = rk4_step(system.dynamics, x, u, dt)
+        if progress is not None:
+            try:
+                progress(k + 1, N)
+            except Exception:
+                pass
 
     theta_meas_log = integrate_gyro(omega_meas_log, theta_true_log[0], dt)
 
