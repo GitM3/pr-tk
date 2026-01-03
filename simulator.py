@@ -56,9 +56,11 @@ def simulate_with_imu(system, imu, x0, T, dt, controller=None):
     omega_meas_log = np.zeros(N)
     acc_true_log = np.zeros((N, 2))
     acc_meas_log = np.zeros((N, 2))
+    u_hist = np.zeros(N)
 
     for k in range(N):
         u = controller(x, time[k]) if controller else 0.0
+        u_hist[k] = u
         state_hist[k] = x
 
         x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(x, u)
@@ -76,15 +78,21 @@ def simulate_with_imu(system, imu, x0, T, dt, controller=None):
         # Integrate plant forward
         x = rk4_step(system.dynamics, x, u, dt)
     theta_meas_log = integrate_gyro(omega_meas_log, theta_true_log[0], dt)
+    theta_meas = theta_meas_log.reshape(-1, 1)
+    x_meas = np.zeros(N).reshape(-1, 1)  # X not measured
+    est_hist = np.hstack([x_meas, theta_meas, omega_meas_log.reshape(-1, 1)])
+
     return (
         time,
         state_hist,
+        est_hist,
         theta_true_log,
         theta_meas_log,
         omega_true_log,
         omega_meas_log,
         acc_true_log,
         acc_meas_log,
+        u_hist,
     )
 
 
@@ -244,11 +252,67 @@ if __name__ == "__main__":
     #     trace_length=200,
     #     state_est_history=est_hist,
     #     est_trace=True,
-    #     theta_gyro=theta_m,
-    #     gyro_trace=True,
     # )
 
-    # WITH controller
+    # # WITH controller
+    # lqr = LQRController(
+    #     system,
+    #     Q=np.diag([1.0, 1.0, 10.0, 100.0]),
+    #     R=np.array([[10.0]]),
+    #     x_ref=np.array([0.0, 0.0, 0.0, 0.0]),
+    #     u_limit=50.0,
+    #     alpha=1.0,
+    # )
+    # imu = IMU()
+    # (
+    #     time,
+    #     state_hist,
+    #     est_hist,
+    #     theta_t,
+    #     theta_m,
+    #     omega_t,
+    #     omega_m,
+    #     acc_t,
+    #     acc_m,
+    #     u_hist,
+    # ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
+    #
+    # plot_imu_ekf_vs_truth(
+    #     time=time,
+    #     system=system,
+    #     imu=imu,
+    #     x_true=state_hist,
+    #     x_ekf=est_hist,
+    #     theta_gyro=theta_m,
+    #     omega_meas=omega_m,
+    #     acc_true_body=acc_t,
+    #     acc_meas=acc_m,
+    #     u_hist=u_hist,
+    # )
+    #
+    # plot_imu_ekf_error_overlay(
+    #     time=time,
+    #     system=system,
+    #     imu=imu,
+    #     x_true=state_hist,
+    #     x_ekf=est_hist,
+    #     theta_gyro=theta_m,
+    #     omega_meas=omega_m,
+    #     acc_true_body=acc_t,
+    #     acc_meas=acc_m,
+    #     u_hist=u_hist,
+    # )
+    #
+    # animate_cart_pendulum(
+    #     time,
+    #     state_hist,
+    #     L,
+    #     trace=True,
+    #     trace_length=200,
+    #     state_est_history=est_hist,
+    #     est_trace=True,
+    # )
+    # WITHOUT EKF
     lqr = LQRController(
         system,
         Q=np.diag([1.0, 1.0, 10.0, 100.0]),
@@ -269,33 +333,7 @@ if __name__ == "__main__":
         acc_t,
         acc_m,
         u_hist,
-    ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
-
-    plot_imu_ekf_vs_truth(
-        time=time,
-        system=system,
-        imu=imu,
-        x_true=state_hist,
-        x_ekf=est_hist,
-        theta_gyro=theta_m,
-        omega_meas=omega_m,
-        acc_true_body=acc_t,
-        acc_meas=acc_m,
-        u_hist=u_hist,
-    )
-
-    plot_imu_ekf_error_overlay(
-        time=time,
-        system=system,
-        imu=imu,
-        x_true=state_hist,
-        x_ekf=est_hist,
-        theta_gyro=theta_m,
-        omega_meas=omega_m,
-        acc_true_body=acc_t,
-        acc_meas=acc_m,
-        u_hist=u_hist,
-    )
+    ) = simulate_with_imu(system, imu, x0, T, dt, controller=lqr)
 
     animate_cart_pendulum(
         time,
@@ -305,6 +343,4 @@ if __name__ == "__main__":
         trace_length=200,
         state_est_history=est_hist,
         est_trace=True,
-        theta_gyro=theta_m,
-        gyro_trace=True,
     )

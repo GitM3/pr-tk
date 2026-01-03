@@ -13,8 +13,6 @@ def animate_cart_pendulum(
     trace_length=None,
     state_est_history=None,
     est_trace=True,
-    theta_gyro=None,
-    gyro_trace=False,
 ):
     x_cart = state_history[:, 0]
     theta = state_history[:, 2]
