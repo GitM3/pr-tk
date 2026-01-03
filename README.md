@@ -141,3 +141,6 @@ $$
 
 ## Output
 ![EKF vs Naive Integration](figures/ekf_vs_int.png)
+![figures/ekf-pendulum.gif]
+- Problem: linearization error.
+- No observation for x, need wheel encoder or something
