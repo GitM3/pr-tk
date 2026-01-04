@@ -170,66 +170,63 @@ def plot_true_vs_meas(time, x_true, x_meas, u=None):
     plt.show()
 
 
-def plot_imu_ekf_vs_truth(
-    time,
+def plot_imu_vs_ekf(
     system,
     imu,
-    x_true,
-    x_ekf,
-    theta_gyro,
-    omega_meas,
-    acc_true_body,
-    acc_meas,
-    u_hist,
+    ekf_results: dict,
+    imu_results: dict,
     return_fig: bool = False,
 ):
+    time = ekf_results["time"]
+    x_true = ekf_results["x_true"]
+    x_ekf = ekf_results["x_meas"]
+    x_imu = imu_results["x_meas"]
+
+    acc_true_body = ekf_results["acc_true"]
+    acc_meas = ekf_results["acc_meas"]
+    u_hist = ekf_results["u"]
+
     N = len(time)
+
     acc_ekf = np.zeros_like(acc_true_body)
     for k in range(N):
-        xk = x_ekf[k]
-        s = xk[:4]
-        uk = u_hist[k] if k < len(u_hist) else 0.0
-        x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(s, uk)
+        s = x_ekf[k][:4]
+        uk = u_hist[k]
+        _, x_ddot, _, theta_ddot = system.dynamics(s, uk)
         _, a_tip = system.tip_kinematics(s, x_ddot, theta_ddot)
-        theta = s[2]
-        acc_ekf[k] = rot2d(theta).T @ (a_tip - imu.g_world)
+        acc_ekf[k] = rot2d(s[2]).T @ (a_tip - imu.g_world)
 
     fig = plt.figure(figsize=(12, 12))
 
-    # Angle
     plt.subplot(4, 1, 1)
-    plt.plot(time, x_true[:, 2], label="True theta")
-    plt.plot(time, x_ekf[:, 2], label="EKF theta")
-    if theta_gyro is not None:
-        plt.plot(time, theta_gyro, label="Gyro-integrated theta", alpha=0.7)
+    plt.plot(time, x_true[:, 2], label="True")
+    plt.plot(time, x_ekf[:, 2], label="EKF")
+    plt.plot(time, x_imu[:, 2], label="IMU-only", alpha=0.7)
     plt.ylabel("theta [rad]")
     plt.grid(True)
     plt.legend()
 
-    # Angular rate
     plt.subplot(4, 1, 2)
-    plt.plot(time, x_true[:, 3], label="True theta_dot")
-    plt.plot(time, x_ekf[:, 3], label="EKF theta_dot")
-    plt.plot(time, omega_meas, label="Gyro measured", alpha=0.7)
+    plt.plot(time, x_true[:, 3], label="True")
+    plt.plot(time, x_ekf[:, 3], label="EKF")
+    plt.plot(time, x_imu[:, 3], label="IMU-only", alpha=0.7)
     plt.ylabel("theta_dot [rad/s]")
     plt.grid(True)
     plt.legend()
 
-    # Accel X (body)
     plt.subplot(4, 1, 3)
-    plt.plot(time, acc_true_body[:, 0], label="True acc_x (body)")
-    plt.plot(time, acc_ekf[:, 0], label="EKF acc_x (body)")
-    plt.plot(time, acc_meas[:, 0], label="IMU acc_x", alpha=0.7)
-    plt.ylabel("acc_x [m/s^2]")
+    plt.plot(time, acc_true_body[:, 0], label="True")
+    plt.plot(time, acc_ekf[:, 0], label="EKF")
+    plt.plot(time, acc_meas[:, 0], label="IMU", alpha=0.7)
+    plt.ylabel("acc_x [m/s²]")
     plt.grid(True)
     plt.legend()
 
-    # Accel Y (body)
     plt.subplot(4, 1, 4)
-    plt.plot(time, acc_true_body[:, 1], label="True acc_y (body)")
-    plt.plot(time, acc_ekf[:, 1], label="EKF acc_y (body)")
-    plt.plot(time, acc_meas[:, 1], label="IMU acc_y", alpha=0.7)
-    plt.ylabel("acc_y [m/s^2]")
+    plt.plot(time, acc_true_body[:, 1], label="True")
+    plt.plot(time, acc_ekf[:, 1], label="EKF")
+    plt.plot(time, acc_meas[:, 1], label="IMU", alpha=0.7)
+    plt.ylabel("acc_y [m/s²]")
     plt.xlabel("Time [s]")
     plt.grid(True)
     plt.legend()
@@ -240,106 +237,59 @@ def plot_imu_ekf_vs_truth(
     plt.show()
 
 
-def plot_imu_ekf_error_overlay(
-    time,
-    system,
-    imu,
-    x_true,
-    x_ekf,
-    theta_gyro,
-    omega_meas,
-    acc_true_body,
-    acc_meas,
-    u_hist,
-    angle_wrap=True,
+def plot_imu_ekf_errors(
+    ekf_results: dict,
+    imu_results: dict,
+    angle_wrap: bool = True,
     return_fig: bool = False,
 ):
-    """
-    Overlay error plots: EKF vs IMU errors on same axes.
-    - Angle error: (EKF theta - true) vs (gyro-integrated - true)
-    - Angular rate error: (EKF theta_dot - true) vs (gyro - true)
-    - Accel errors: EKF predicted specific force vs IMU vs true specific force
-    """
-    N = len(time)
-    # EKF predicted body-frame accelerations
-    acc_ekf = np.zeros_like(acc_true_body)
-    for k in range(N):
-        xk = x_ekf[k]
-        s = xk[:4]
-        uk = u_hist[k] if k < len(u_hist) else 0.0
-        x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(s, uk)
-        _, a_tip = system.tip_kinematics(s, x_ddot, theta_ddot)
-        theta = s[2]
-        acc_ekf[k] = rot2d(theta).T @ (a_tip - imu.g_world)
+    time = ekf_results["time"]
+    x_true = ekf_results["x_true"]
+    x_ekf = ekf_results["x_meas"]
+    x_imu = imu_results["x_meas"]
 
-    # Errors
     e_theta_ekf = x_ekf[:, 2] - x_true[:, 2]
-    e_theta_gyro = theta_gyro - x_true[:, 2]
+    e_theta_imu = x_imu[:, 2] - x_true[:, 2]
+
     if angle_wrap:
         e_theta_ekf = wrap_angle_pi(e_theta_ekf)
-        e_theta_gyro = wrap_angle_pi(e_theta_gyro)
+        e_theta_imu = wrap_angle_pi(e_theta_imu)
 
     e_w_ekf = x_ekf[:, 3] - x_true[:, 3]
-    e_w_imu = omega_meas - x_true[:, 3]
+    e_w_imu = x_imu[:, 3] - x_true[:, 3]
 
-    e_ax_ekf = acc_ekf[:, 0] - acc_true_body[:, 0]
-    e_ax_imu = acc_meas[:, 0] - acc_true_body[:, 0]
-
-    e_ay_ekf = acc_ekf[:, 1] - acc_true_body[:, 1]
-    e_ay_imu = acc_meas[:, 1] - acc_true_body[:, 1]
-
-    print("\nCombined Error Summary (EKF vs IMU)")
+    print("\nCombined Error Summary (EKF vs IMU-only)")
     print("-" * 80)
     for err, name in [
         (e_theta_ekf, "theta EKF (rad)"),
-        (e_theta_gyro, "theta gyro (rad)"),
+        (e_theta_imu, "theta IMU-only (rad)"),
         (e_w_ekf, "theta_dot EKF (rad/s)"),
-        (e_w_imu, "theta_dot gyro (rad/s)"),
-        (e_ax_ekf, "acc_x EKF (m/s^2)"),
-        (e_ax_imu, "acc_x IMU (m/s^2)"),
-        (e_ay_ekf, "acc_y EKF (m/s^2)"),
-        (e_ay_imu, "acc_y IMU (m/s^2)"),
+        (e_w_imu, "theta_dot IMU-only (rad/s)"),
     ]:
         s = summarize_error(err, name)
         print(
-            f"{s['name']:<28}  MAE={s['MAE']:.6f}  RMSE={s['RMSE']:.6f}  "
-            f"Bias={s['Bias(mean)']:.6f}  Std(zm)={s['Std(zero-mean)']:.6f}"
+            f"{s['name']:<28}  "
+            f"MAE={s['MAE']:.6f}  "
+            f"RMSE={s['RMSE']:.6f}  "
+            f"Bias={s['Bias(mean)']:.6f}  "
+            f"Std(zm)={s['Std(zero-mean)']:.6f}"
         )
     print("-" * 80)
 
-    # Plots
-    fig = plt.figure(figsize=(12, 10))
+    fig = plt.figure(figsize=(12, 8))
 
-    plt.subplot(4, 1, 1)
-    plt.plot(time, e_theta_ekf, label="EKF theta error")
-    plt.plot(time, e_theta_gyro, label="Gyro-integrated theta error", alpha=0.7)
-    plt.ylabel("rad")
-    plt.title("Angle Error")
+    plt.subplot(2, 1, 1)
+    plt.plot(time, e_theta_ekf, label="EKF")
+    plt.plot(time, e_theta_imu, label="IMU-only", alpha=0.7)
+    plt.ylabel("theta error [rad]")
     plt.grid(True)
     plt.legend()
 
-    plt.subplot(4, 1, 2)
-    plt.plot(time, e_w_ekf, label="EKF theta_dot error")
-    plt.plot(time, e_w_imu, label="Gyro error", alpha=0.7)
-    plt.ylabel("rad/s")
-    plt.title("Angular Rate Error")
-    plt.grid(True)
-    plt.legend()
-
-    plt.subplot(4, 1, 3)
-    plt.plot(time, e_ax_ekf, label="EKF acc_x error")
-    plt.plot(time, e_ax_imu, label="IMU acc_x error", alpha=0.7)
-    plt.ylabel("m/s^2")
-    plt.title("Accel X Error (body)")
-    plt.grid(True)
-    plt.legend()
-
-    plt.subplot(4, 1, 4)
-    plt.plot(time, e_ay_ekf, label="EKF acc_y error")
-    plt.plot(time, e_ay_imu, label="IMU acc_y error", alpha=0.7)
-    plt.ylabel("m/s^2")
+    plt.subplot(2, 1, 2)
+    plt.plot(time, e_w_ekf, label="EKF")
+    plt.plot(time, e_w_imu, label="IMU-only", alpha=0.7)
+    plt.ylabel("theta_dot error [rad/s]")
     plt.xlabel("Time [s]")
-    plt.title("Accel Y Error (body)")
     plt.grid(True)
     plt.legend()
 

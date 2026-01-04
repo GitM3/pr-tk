@@ -6,8 +6,8 @@ from estimation.ekf import EKF
 from plotting.plotting import (
     animate_cart_pendulum,
     plot_ekf_statistics,
-    plot_imu_ekf_error_overlay,
-    plot_imu_ekf_vs_truth,
+    plot_imu_ekf_errors,
+    plot_imu_vs_ekf,
     plot_kalman_gain,
     plot_true_vs_meas,
 )
@@ -257,6 +257,28 @@ def run_simulate_ekf_only(system, T, dt):
     )
 
 
+def run_simulate_full(system, T, dt):
+    """
+    EKF vs No-EKF With LQR controller
+    """
+    imu = IMU(seed=SEED)
+    encoder = WheelEncoder(seed=SEED)
+    lqr = LQRController(
+        system,
+        Q=np.diag([1.0, 1.0, 10.0, 10.0]),
+        R=np.array([[10.0]]),
+        x_ref=np.array([3.5, 0.0, 0.0, 0.0]),
+        u_limit=50.0,
+        alpha=1.0,
+    )
+    x0 = np.array([0.0, 0.0, np.deg2rad(5), 0.0])
+    ekf_results = simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=lqr)
+    imu.reset()
+    imu_results = simulate_with_imu(system, imu, encoder, x0, T, dt, controller=lqr)
+    plot_imu_vs_ekf(system, imu, ekf_results, imu_results)
+    plot_imu_ekf_errors(ekf_results, imu_results)
+
+
 if __name__ == "__main__":
     M = 1.0
     m = 0.2  # TODO: butler bot params
@@ -267,52 +289,5 @@ if __name__ == "__main__":
     dt = 0.01
 
     # run_simulate_imu_only(system, T, dt)
-    run_simulate_ekf_only(system, T, dt)
-
-    # x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
-    # imu = IMU()
-    # lqr = LQRController(
-    #     system,
-    #     Q=np.diag([1.0, 1.0, 10.0, 10.0]),
-    #     R=np.array([[10.0]]),
-    #     x_ref=np.array([3.5, 0.0, 0.0, 0.0]),
-    #     u_limit=50.0,
-    #     alpha=1.0,
-    # )
-    # (
-    #     time,
-    #     state_hist,
-    #     est_hist,
-    #     theta_t,
-    #     theta_m,
-    #     omega_t,
-    #     omega_m,
-    #     acc_t,
-    #     acc_m,
-    #     u_hist,
-    #     stats,
-    # ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
-    #
-    #
-    # plot_imu_ekf_error_overlay(
-    #     time=time,
-    #     system=system,
-    #     imu=imu,
-    #     x_true=state_hist,
-    #     x_ekf=est_hist,
-    #     theta_gyro=theta_m,
-    #     omega_meas=omega_m,
-    #     acc_true_body=acc_t,
-    #     acc_meas=acc_m,
-    #     u_hist=u_hist,
-    # )
-    #
-    # animate_cart_pendulum(
-    #     time,
-    #     state_hist,
-    #     L,
-    #     trace=True,
-    #     trace_length=100,
-    #     state_est_history=est_hist,
-    #     est_trace=True,
-    # )
+    # run_simulate_ekf_only(system, T, dt)
+    run_simulate_full(system, T, dt)
