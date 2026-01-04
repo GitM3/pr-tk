@@ -96,18 +96,16 @@ def simulate_with_imu(system, imu, encoder, x0, T, dt, controller=None):
     }
 
 
-def f_disc(x, u):
-    # State: [x, x_dot, theta, theta_dot, b_g, b_ax, b_ay]
-    s = x[:4]
-    b = x[4:]
-    s_next = rk4_step(system.dynamics, s, u, dt)
-    return np.hstack([s_next, b])
-
-
 def simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=None):
     N = int(T / dt)
     time = np.linspace(0, T, N)
     g_world = imu.g_world
+
+    def f_disc(x, u):
+        s = x[:4]
+        b = x[4:]
+        s_next = rk4_step(system.dynamics, s, u, dt)
+        return np.hstack([s_next, b])
 
     def h_meas(x, u):
         x_pos, x_dot, theta, theta_dot = x[:4]
@@ -148,7 +146,9 @@ def simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=None):
         ]
     )
     # Process noise for [x, x_dot, theta, theta_dot, b_g, b_ax, b_ay]
-    R = np.diag([1e-5, 1e-3, 1e-6, 1e-3, 1e-8, 1e-6, 1e-6])
+    bg_rw_var = (imu.bg_rw_std**2) * dt
+    ba_rw_var = (imu.ba_rw_std**2) * dt
+    R = np.diag([1e-5, 1e-3, 1e-6, 1e-3, bg_rw_var, ba_rw_var, ba_rw_var])
 
     ekf = EKF(
         g_motion=f_disc,
