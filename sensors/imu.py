@@ -34,7 +34,7 @@ class IMU:
         accel_meas = (
             accel_true_body + self.ba + np.random.randn(2) * self.accel_noise_std
         )
-        self.bg += np.random.randn() * np.sqrt(dt)
+        self.bg += np.random.randn() * np.sqrt(dt) * self.bg_rw_std
         return omega_meas, accel_meas
 
     def reset(self):
@@ -65,15 +65,12 @@ if __name__ == "__main__":
     acc_meas_log = []
 
     for k in range(N):
-        omega_t, omega_m, acc_t, acc_m = imu.measure(
-            theta=theta[k],
-            theta_dot=theta_dot[k],
-            a_world=a_world[k],
-        )
+        omega_m, acc_m = imu.measure(theta[k], theta_dot[k], a_world[k], dt)
 
-        omega_true_log.append(omega_t)
+        omega_true_log.append(theta_dot[k])
         omega_meas_log.append(omega_m)
-        acc_true_log.append(acc_t)
+        acc_true_body = rot2d(theta[k]).T @ (a_world[k] - imu.g_world)
+        acc_true_log.append(acc_true_body)
         acc_meas_log.append(acc_m)
 
     omega_true_log = np.array(omega_true_log)
