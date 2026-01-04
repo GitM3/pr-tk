@@ -84,12 +84,14 @@ IMU at the tip measures angular rate and specific force in the body frame and si
 \end{align}
 ```
 
-The measurement model is
+Since there is no way to infer the $x$ position, a simple wheel encoder sensor is modeled to give noisy location estimates. Of course this does not model wheel slipage, but can easily be added later.
+![](figures/wheel.png)
+As a result the measurement model is
 
 ```math
 \begin{align}
 \mathbf{z}_k = \mathbf{h}(\mathbf{x}_k, u_k) + \mathbf{\delta}_k,\quad
-\mathbf{h}(\mathbf{x},u) = \begin{bmatrix} \dot{\theta} + b_g \\ a_x^B + b_{ax} \\ a_y^B + b_{ay} \end{bmatrix} = \begin{bmatrix} \dot{\theta} + b_g \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax} \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_y + b_{ay} \end{bmatrix}.
+\mathbf{h}(\mathbf{x},u) = \begin{bmatrix} x \\ \dot{x} \\ \dot{\theta} + b_g \\ a_x^B + b_{ax} \\ a_y^B + b_{ay} \end{bmatrix} = \begin{bmatrix} \dot{\theta} + b_g \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax} \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_y + b_{ay} \end{bmatrix}.
 \end{align}
 ```
 
@@ -135,50 +137,17 @@ H_t[:,i] \approx \frac{h(\bar{\mu}_t + \epsilon\, u_t) - h(\bar{\mu}_t - \epsilo
 ### EKF Results
 ![EKF vs Naive Integration](figures/error.png)
 Since the baseline is integrating the IMU output to determine the state it is compared with the EKF results above. We see a considerable decrease in error and bias reduction. The following table shows additional metrics for comparison.
-
-```math
-\begin{array}{l|l|c|c|c|c}
-\textbf{Quantity} & \textbf{Method} &
-\textbf{MAE} & \textbf{RMSE} & \textbf{Bias} & \textbf{Std (zero-mean)} \\
-\hline
-\theta~(\mathrm{rad}) &
-\text{EKF} &
-0.001699 & 0.002299 & -2.6\times 10^{-5} & 0.002298 \\
-&
-\text{Gyro integration} &
-0.048416 & 0.055973 & 0.048416 & 0.028086 \\
-\hline
-\dot{\theta}~(\mathrm{rad/s}) &
-\text{EKF} &
-0.008406 & 0.010703 & 0.001015 & 0.010655 \\
-&
-\text{Gyro} &
-0.020054 & 0.022349 & 0.019757 & 0.010446 \\
-\hline
-a_x~(\mathrm{m/s^2}) &
-\text{EKF} &
-0.030407 & 0.040054 & 0.002026 & 0.040003 \\
-&
-\text{IMU} &
-0.111077 & 0.135404 & 0.093012 & 0.098403 \\
-\hline
-a_y~(\mathrm{m/s^2}) &
-\text{EKF} &
-0.011544 & 0.024116 & 0.001530 & 0.024067 \\
-&
-\text{IMU} &
-0.087555 & 0.109962 & -0.048181 & 0.098844 \\
-\end{array}
-```
+| Signal                  | MAE        | RMSE       | Bias (mean) | Std (zero-mean) |
+|-------------------------|------------|------------|-------------|-----------------|
+| theta EKF (rad)         | 0.007242   | 0.008989   | -0.004987   | 0.007479        |
+| theta IMU-only (rad)    | 0.944759   | 1.152210   | 0.944431    | 0.660030        |
+| theta_dot EKF (rad/s)   | 0.035037   | 0.043386   | -0.005135   | 0.043081        |
+| theta_dot IMU-only (rad/s) | 0.181732 | 0.229117   | 0.162199    | 0.161820        |
 
 Mean Absolute Error is used because it shows linear penalty on errors and shows on average how far an estimate is from the truth. RMSE on the other hand strongly penalizes large errors. Thus assessing both can give a good overview of long-term or stead-state tracking quality as well as seeing the effect of large errors that have a high chance of destabilizing control systems.
 Bias is calculated as the mean of the error.
 
-It is seen that the EKF reduces angular bias by over an order of magnitude and substantially lowers RMSE across all measured channels, demonstrating effective bias estimation and nonlinear sensor fusion.
-
->[!NOTE]
-> In the error metrics the $x$ position is not included since we have no way of observing/measuring this state unless a wheel encoder or other sensor is added.
-> I initially wanted to add this, but due to time constraint kept it for future developement.
+It is seen that the EKF reduces angular bias by over an order of magnitude and substantially lowers RMSE across all measured channels, demonstrating effective bias estimation and nonlinear sensor fusion. OF course, the bias in the naive integration would make the drift angle error unsuitable for control.
 
 Lastly, it is important to investigate the Kalman gains and covariance estimates. First, the estimated covariance $P_k$ show the filter's self-assessed uncertainty. Large errors with tiny covariance indicate overconfidence in estimates, while large covariances with small errors indicate overconservatism. Typically these consistency checks are done with statistical tests (such as NIS) to see whether the filter matches the underlying system modeling assumptions but for this assignment the following figure shows that for observed states there is a fast decay in angle uncertainty, giving sufficient confidence in modeling assumptions. The bias uncertainty decays slowly but the there is persistent and growing uncertainty for unobserved states (namely $x,\dot{x}$. This is expected from our system modeling as there is no sensor measuring the robot's position.
 
@@ -199,7 +168,9 @@ As an experiment, full state estimatation is compared to the ground truth dynami
 Since there is no observation on the x state (through a wheel encoder), there is no way to improve x estimates and as a result the total state estimate drifts:
 ![](figures/ekf-pendulum.gif)
 
-Additionally if motion is aggressive, linearization errors will occur, which is a known limit of the EKF.
+Additionally if motion is aggressive, linearization errors will occur, which is a known limit of the EKF. However, with the wheel encoder added, the state estimation is accurate:
+![](figures/ekf-swing.gif)
+
 ## LQR
 The LQR controller is standard and included mainly for stabilization comparisons. The control law is:
 ```math
@@ -208,3 +179,5 @@ u = -K(x - x_{\mathrm{ref}})
 Weights used are $Q=\mathrm{diag}(1,\,1,\,10,\,100)$ and $R=10$, with the upright equilibrium as the reference.
 
 This [derivation](https://youtu.be/8QlS6L--Hic?si=pDTa_XyIbnLle6FW) and associated matlab code, attached here under `references/MATLAB` for convenience, was used to implement the LQR, including the following [references](https://python-control.readthedocs.io/en/0.10.2/generated/control.dare.html) for python implementations on the discrete Riccati equation solution.
+
+Control with and without EKF based estimation is shown below:
