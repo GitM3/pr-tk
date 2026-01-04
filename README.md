@@ -67,7 +67,7 @@ The above is a simplified model of an inverted pendulum. This [reference](https:
 In summary, the state dynamics need for state-space representation of the robot is:
 
 ```math
-\begin{aligned} & \dot{x} =\frac{d x}{d t}=v \\ & \ddot{x}=\frac{d \theta}{d t}=\frac{d^2 x}{d t^2}=\frac{L u+B_m \dot{\theta} \cos (\theta)-m L g \sin (\theta) \cos (\theta)+m L^2 \dot{\theta}^2 \sin (\theta)-B_M L \dot{x}}{L\left(M+m-m \cos ^2(\theta)\right)} \\ & \dot{\theta}=\frac{d \theta}{d t}=\omega \\ & \ddot{\theta}=\frac{d \omega}{d t}=\frac{d^2 \theta}{d t^2}=\frac{-m L \cos (\theta) U-m^2 L^2 \dot{\theta}^2 \sin (\theta) \cos (\theta)+B_M \dot{x} m L \cos (\theta)-(M+m) B_m \dot{\theta}+(M+m) m g L \sin (\theta)}{m L^2\left(M+m-m \cos ^2(\theta)\right)} \end{aligned} 
+\begin{aligned} & \dot{x} =\frac{d x}{d t}=v \\ & \ddot{x}=\frac{d^2 x}{d t^2}=\frac{L u+B_m \dot{\theta} \cos (\theta)-m L g \sin (\theta) \cos (\theta)+m L^2 \dot{\theta}^2 \sin (\theta)-B_M L \dot{x}}{L\left(M+m-m \cos ^2(\theta)\right)} \\ & \dot{\theta}=\frac{d \theta}{d t}=\omega \\ & \ddot{\theta}=\frac{d \omega}{d t}=\frac{d^2 \theta}{d t^2}=\frac{-m L \cos (\theta) u-m^2 L^2 \dot{\theta}^2 \sin (\theta) \cos (\theta)+B_M \dot{x} m L \cos (\theta)-(M+m) B_m \dot{\theta}+(M+m) m g L \sin (\theta)}{m L^2\left(M+m-m \cos ^2(\theta)\right)} \end{aligned} 
 ```
 Then using RK4 numerical integration [Runge-Kutta](https://lpsa.swarthmore.edu/NumInt/NumIntFourth.htm) the forward dynamics can be simulated. The following image shows how the pendulum falls under the force of gravity and oscillates since no controll is exerted yet. The dampening coefficient $B_m$ can be adjusted to match dampening of the pendulum (stiffer means it will converge quicker in oscillations).
 
@@ -84,14 +84,20 @@ IMU at the tip measures angular rate and specific force in the body frame and si
 \end{align}
 ```
 
-Since there is no way to infer the $x$ position, a simple wheel encoder sensor is modeled to give noisy location estimates. Of course this does not model wheel slipage, but can easily be added later.
+Since the IMU alone cannot infer the $x$ position, a simple wheel encoder sensor is modeled to give noisy location estimates. Of course this does not model wheel slipage, but can easily be added later.
 ![](figures/wheel.png)
 As a result the measurement model is
 
 ```math
 \begin{align}
 \mathbf{z}_k = \mathbf{h}(\mathbf{x}_k, u_k) + \mathbf{\delta}_k,\quad
-\mathbf{h}(\mathbf{x},u) = \begin{bmatrix} x \\ \dot{x} \\ \dot{\theta} + b_g \\ a_x^B + b_{ax} \\ a_y^B + b_{ay} \end{bmatrix} = \begin{bmatrix} \dot{\theta} + b_g \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax} \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_y + b_{ay} \end{bmatrix}.
+\mathbf{h}(\mathbf{x},u) = \begin{bmatrix}
+x \\
+\dot{x} \\
+\dot{\theta} + b_g \\
+\big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax} \\
+\big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_y + b_{ay}
+\end{bmatrix}.
 \end{align}
 ```
 
@@ -100,7 +106,7 @@ Process and measurement noises are modeled Gaussian as mentioned before.
 ```math
 \mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_t),\quad \mathbf{v}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_t),
 ```
-with $\mathbf{R}_t=\operatorname{diag}(q_x, q_{\dot{x}}, q_\theta, q_{\dot{\theta}}, q_{b_g}, q_{b_{ax}}, q_{b_{ay}})$ and $\mathbf{Q}_t=\operatorname{diag}(\sigma_\omega^2,\sigma_a^2,\sigma_a^2)$.
+with $\mathbf{R}_t=\operatorname{diag}(q_x, q_{\dot{x}}, q_\theta, q_{\dot{\theta}}, q_{b_g}, q_{b_{ax}}, q_{b_{ay}})$ and $\mathbf{Q}_t=\operatorname{diag}(\sigma_x^2,\sigma_{\dot{x}}^2,\sigma_\omega^2,\sigma_a^2,\sigma_a^2)$.
 
 ### EKF with Numerical Linearization
 - Reference: Probabilistic Robotics.
@@ -149,7 +155,7 @@ Bias is calculated as the mean of the error.
 
 It is seen that the EKF reduces angular bias by over an order of magnitude and substantially lowers RMSE across all measured channels, demonstrating effective bias estimation and nonlinear sensor fusion. OF course, the bias in the naive integration would make the drift angle error unsuitable for control.
 
-Lastly, it is important to investigate the Kalman gains and covariance estimates. First, the estimated covariance $P_k$ show the filter's self-assessed uncertainty. Large errors with tiny covariance indicate overconfidence in estimates, while large covariances with small errors indicate overconservatism. Typically these consistency checks are done with statistical tests (such as NIS) to see whether the filter matches the underlying system modeling assumptions but for this assignment the following figure shows that for observed states there is a fast decay in angle uncertainty, giving sufficient confidence in modeling assumptions. The bias uncertainty decays slowly but the there is persistent and growing uncertainty for unobserved states (namely $x,\dot{x}$. This is expected from our system modeling as there is no sensor measuring the robot's position.
+Lastly, it is important to investigate the Kalman gains and covariance estimates. First, the estimated covariance $P_k$ show the filter's self-assessed uncertainty. Large errors with tiny covariance indicate overconfidence in estimates, while large covariances with small errors indicate overconservatism. Typically these consistency checks are done with statistical tests (such as NIS) to see whether the filter matches the underlying system modeling assumptions but for this assignment the following figure shows that for observed states there is a fast decay in angle uncertainty, giving sufficient confidence in modeling assumptions. The bias uncertainty decays slowly; with the wheel encoder enabled, the $x$ and $\dot{x}$ uncertainties also decay, whereas without the encoder those states remain weakly observed and their uncertainty grows.
 
 ![](figures/cov.png)
 
@@ -165,7 +171,7 @@ For the acceleration measurements, there is initial fluctuation, but as the pend
 
 ### EKF Pendulum integration
 As an experiment, full state estimatation is compared to the ground truth dynamics (in other animations, the predicted $x$ state is not utilised).
-Since there is no observation on the x state (through a wheel encoder), there is no way to improve x estimates and as a result the total state estimate drifts:
+Without the wheel encoder, there is no observation on the $x$ state, so there is no way to improve $x$ estimates and the total state estimate drifts:
 ![](figures/ekf-pendulum.gif)
 
 Additionally if motion is aggressive, linearization errors will occur, which is a known limit of the EKF. However, with the wheel encoder added, the state estimation is accurate:
