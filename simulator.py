@@ -135,6 +135,7 @@ def simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=None):
     acc_meas_log = np.zeros((N, 2))
     u_hist = np.zeros(N)
     theta_meas = x0[2]
+    imu_est_log = np.zeros((N, len(x0)))
 
     Q = np.diag(
         [
@@ -173,10 +174,12 @@ def simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=None):
         omega_meas, acc_meas = imu.measure(
             theta=x[2], theta_dot=theta_dot, a_world=a_tip, dt=dt
         )
-        theta_meas = theta_meas + omega_meas * dt
         z = np.array([x_enc, x_dot_enc, omega_meas, acc_meas[0], acc_meas[1]])
         x_hat, P, _, _, K, _, _ = ekf.step(x_hat, P, z, u)
 
+        # IMU estimation reference:
+        theta_meas = theta_meas + omega_meas * dt
+        imu_x_hat = np.array([x_enc, x_dot_enc, theta_meas, omega_meas])
         P_diag_hist[k] = np.diag(P)
         K_hist[k] = K
         u_hist[k] = u
@@ -184,11 +187,13 @@ def simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=None):
         acc_true_log[k] = rot2d(x[2]).T @ (a_tip - imu.g_world)
         acc_meas_log[k] = acc_meas
         est_hist[k] = x_hat[:4]
+        imu_est_log[k] = imu_x_hat
 
     return {
         "time": time,
         "x_true": state_hist,
         "x_meas": est_hist,
+        "imu_meas": imu_est_log,
         "acc_true": acc_true_log,
         "acc_meas": acc_meas_log,
         "u": u_hist,
@@ -274,9 +279,9 @@ def run_simulate_full(system, T, dt):
     x0 = np.array([0.0, 0.0, np.deg2rad(5), 0.0])
     ekf_results = simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=lqr)
     imu.reset()
-    imu_results = simulate_with_imu(system, imu, encoder, x0, T, dt, controller=lqr)
-    plot_imu_vs_ekf(system, imu, ekf_results, imu_results)
-    plot_imu_ekf_errors(ekf_results, imu_results)
+    results = simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=lqr)
+    plot_imu_vs_ekf(system, imu, results)
+    plot_imu_ekf_errors(ekf_results)
 
 
 if __name__ == "__main__":

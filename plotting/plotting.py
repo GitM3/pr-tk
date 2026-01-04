@@ -173,18 +173,17 @@ def plot_true_vs_meas(time, x_true, x_meas, u=None):
 def plot_imu_vs_ekf(
     system,
     imu,
-    ekf_results: dict,
-    imu_results: dict,
+    results: dict,
     return_fig: bool = False,
 ):
-    time = ekf_results["time"]
-    x_true = ekf_results["x_true"]
-    x_ekf = ekf_results["x_meas"]
-    x_imu = imu_results["x_meas"]
+    time = results["time"]
+    x_true = results["x_true"]
+    x_ekf = results["x_meas"]
+    x_imu = results["imu_meas"]
 
-    acc_true_body = ekf_results["acc_true"]
-    acc_meas = ekf_results["acc_meas"]
-    u_hist = ekf_results["u"]
+    acc_true_body = results["acc_true"]
+    acc_meas = results["acc_meas"]
+    u_hist = results["u"]
 
     N = len(time)
 
@@ -238,15 +237,14 @@ def plot_imu_vs_ekf(
 
 
 def plot_imu_ekf_errors(
-    ekf_results: dict,
-    imu_results: dict,
+    results: dict,
     angle_wrap: bool = True,
     return_fig: bool = False,
 ):
-    time = ekf_results["time"]
-    x_true = ekf_results["x_true"]
-    x_ekf = ekf_results["x_meas"]
-    x_imu = imu_results["x_meas"]
+    time = results["time"]
+    x_true = results["x_true"]
+    x_ekf = results["x_meas"]
+    x_imu = results["imu_meas"]
 
     e_theta_ekf = x_ekf[:, 2] - x_true[:, 2]
     e_theta_imu = x_imu[:, 2] - x_true[:, 2]
