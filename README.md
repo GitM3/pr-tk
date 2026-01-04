@@ -28,30 +28,32 @@ Compared to naive IMU integration for the state estimate, the EKF reduces RMSE e
 ### IMU sensor
 Reference for the gyroscope and accelerometer [model](https://arxiv.org/pdf/2307.11758) was used and the ground truth pose is:
 
-$$
+```math
 \mathbf{p}_k = \begin{bmatrix} x_k \\ y_k \end{bmatrix},
 \quad
 \mathbf{v}_k = \begin{bmatrix} v_{x,k} \\ v_{y,k} \end{bmatrix},
 \quad
 \theta_k \in \mathbb{R}
-$$
+```
 
 #### Gyro Model
 - Measures the angular velocity of the pendulum tip.
-$$
+```math
 \tilde{\omega}_k = \frac{\theta_{k+1} - \theta_k}{\Delta t}+b_g+\eta_g
-$$
+```
 - $\omega$ is the measured angular velocity from the true velocity with bias and zero-mean additive Gaussian noise $\eta_g$.
 
 #### Accelerometers
 - Measures the linear acceleration along the $x-y$ plane.
-$$\tilde{a_k}=R(\theta_k^T)(a^W_k-g^w)+b_{a}+\eta_{a}$$
+```math
+\tilde{a_k}=R(\theta_k^T)(a^W_k-g^w)+b_{a}+\eta_{a}
+```
 - Where gravity $g^w=[0,-g]^T$
 - $R(\theta_k)$ is the 2D cartesian rotation matrix.
 - where
-$$
+```math
 \mathbf{a}^W_k=\frac{\mathbf{v}_{k+1} - \mathbf{v}_k}{\Delta t}
-$$
+```
 ### IMU simulation results
 ![Noisy IMU plot](figures/noisy_imu.png)
 For a test circular trajectory, the ground truth is compared to different noise levels.The gyroscope bias is clearly vissible in the top plot. The accelerometer results show a sinusodial graph as expected for a circular trajectory. The noise seems minimal but this causes issues when later integration is done for state estimation. 
@@ -64,9 +66,9 @@ The above is a simplified model of an inverted pendulum. This [reference](https:
 
 In summary, the state dynamics need for state-space representation of the robot is:
 
-$$
+```math
 \begin{aligned} & \dot{x} =\frac{d x}{d t}=v \\ & \ddot{x}=\frac{d \theta}{d t}=\frac{d^2 x}{d t^2}=\frac{L u+B_m \dot{\theta} \cos (\theta)-m L g \sin (\theta) \cos (\theta)+m L^2 \dot{\theta}^2 \sin (\theta)-B_M L \dot{x}}{L\left(M+m-m \cos ^2(\theta)\right)} \\ & \dot{\theta}=\frac{d \theta}{d t}=\omega \\ & \ddot{\theta}=\frac{d \omega}{d t}=\frac{d^2 \theta}{d t^2}=\frac{-m L \cos (\theta) U-m^2 L^2 \dot{\theta}^2 \sin (\theta) \cos (\theta)+B_M \dot{x} m L \cos (\theta)-(M+m) B_m \dot{\theta}+(M+m) m g L \sin (\theta)}{m L^2\left(M+m-m \cos ^2(\theta)\right)} \end{aligned} 
-$$
+```
 Then using RK4 numerical integration [Runge-Kutta](https://lpsa.swarthmore.edu/NumInt/NumIntFourth.htm) the forward dynamics can be simulated. The following image shows how the pendulum falls under the force of gravity and oscillates since no controll is exerted yet. The dampening coefficient $B_m$ can be adjusted to match dampening of the pendulum (stiffer means it will converge quicker in oscillations).
 
 ![Pendulum dynamics plot](figures/ip_forward.png)
@@ -75,27 +77,27 @@ Then using RK4 numerical integration [Runge-Kutta](https://lpsa.swarthmore.edu/N
 
 IMU at the tip measures angular rate and specific force in the body frame and since the IMU is placed at the tip, the world acceleration $\mathbf{a}^W$ is computed:
 
-$$
+```math
 \begin{align}
 \mathbf{v}_\text{tip} = \begin{bmatrix}\dot{x} + L\cos\theta\,\dot{\theta} \\ -L\sin\theta\,\dot{\theta}\end{bmatrix},\quad 
 \mathbf{a}_\text{tip} = \begin{bmatrix}\ddot{x} - L\sin\theta\,\dot{\theta}^2 + L\cos\theta\,\ddot{\theta} \\ -L\cos\theta\,\dot{\theta}^2 - L\sin\theta\,\ddot{\theta}\end{bmatrix}.
 \end{align}
-$$
+```
 
 The measurement model is
 
-$$
+```math
 \begin{align}
 \mathbf{z}_k = \mathbf{h}(\mathbf{x}_k, u_k) + \mathbf{\delta}_k,\quad
 \mathbf{h}(\mathbf{x},u) = \begin{bmatrix} \dot{\theta} + b_g \\ a_x^B + b_{ax} \\ a_y^B + b_{ay} \end{bmatrix} = \begin{bmatrix} \dot{\theta} + b_g \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax} \\ \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_y + b_{ay} \end{bmatrix}.
 \end{align}
-$$
+```
 
 Process and measurement noises are modeled Gaussian as mentioned before.
 
-$$
+```math
 \mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_t),\quad \mathbf{v}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_t),
-$$
+```
 with $\mathbf{R}_t=\operatorname{diag}(q_x, q_{\dot{x}}, q_\theta, q_{\dot{\theta}}, q_{b_g}, q_{b_{ax}}, q_{b_{ay}})$ and $\mathbf{Q}_t=\operatorname{diag}(\sigma_\omega^2,\sigma_a^2,\sigma_a^2)$.
 
 ### EKF with Numerical Linearization
@@ -105,37 +107,36 @@ At time $t$, given estimate $(\mu_{t-1}, \Sigma_{t-1})$, input $u_t$, and measur
 
 Prediction (motion update)
 
-$$
+```math
 \begin{align}
 \bar{\mu}_t=g(u_t, \mu_{t-1}),\quad  
 G_t = \left.\frac{\partial g}{\partial x}\right|_{\mu_{t-1},u_t},\quad
 \bar{\Sigma}_t = G_t\,\Sigma_{t-1}\,G_t^T + R_t.
 \end{align}
-$$
+```
 
 Update (measurement update)
 
-$$
+```math
 \begin{align}
 H_t = \left.\frac{\partial h}{\partial x}\right|_{\bar{\mu}_t,u_t},\quad
 K_t=\bar{\Sigma}_t H_t^T(H_t \bar{\Sigma}_t H_t^T + Q_t)^{-1},\quad
 \mu_t=\bar{\mu}_t+K_t(z_t-h(\bar{\mu}_t,u_t)),\quad
 \Sigma_t=(I-K_t H_t)\,\bar{\Sigma}_t.
 \end{align}
-$$
+```
 
 The Jacobians can be solved analytically here, but for more complex system this is often impossible and hence for the sake of exercise numerical Jacobians are computed instead. Each partial derivative is calculated by central differences with a small $\epsilon$:
 
-$$
+```math
 G_t[:,i] \approx \frac{g(\mu_{t-1} + \epsilon\, u_t) - g(\mu_{t-1} - \epsilon\, u_t)}{2\epsilon},\quad
 H_t[:,i] \approx \frac{h(\bar{\mu}_t + \epsilon\, u_t) - h(\bar{\mu}_t - \epsilon\,u_t)}{2\epsilon}.
-$$
+```
 ### EKF Results
 ![EKF vs Naive Integration](figures/error.png)
 Since the baseline is integrating the IMU output to determine the state it is compared with the EKF results above. We see a considerable decrease in error and bias reduction. The following table shows additional metrics for comparison.
 
-$$
-
+```math
 \begin{array}{l|l|c|c|c|c}
 \textbf{Quantity} & \textbf{Method} &
 \textbf{MAE} & \textbf{RMSE} & \textbf{Bias} & \textbf{Std (zero-mean)} \\
@@ -168,7 +169,7 @@ a_y~(\mathrm{m/s^2}) &
 \text{IMU} &
 0.087555 & 0.109962 & -0.048181 & 0.098844 \\
 \end{array}
-$$
+```
 
 Mean Absolute Error is used because it shows linear penalty on errors and shows on average how far an estimate is from the truth. RMSE on the other hand strongly penalizes large errors. Thus assessing both can give a good overview of long-term or stead-state tracking quality as well as seeing the effect of large errors that have a high chance of destabilizing control systems.
 Bias is calculated as the mean of the error.
@@ -199,22 +200,11 @@ Since there is no observation on the x state (through a wheel encoder), there is
 ![](figures/ekf-pendulum.gif)
 
 Additionally if motion is aggressive, linearization errors will occur, which is a known limit of the EKF.
-### LQR
-A LQR controller was implemented using the following references.
+## LQR
+The LQR controller is standard and included mainly for stabilization comparisons. The control law is:
+```math
+u = -K(x - x_{\mathrm{ref}})
+```
+Weights used are $Q=\mathrm{diag}(1,\,1,\,10,\,100)$ and $R=10$, with the upright equilibrium as the reference.
 
-- From [example](https://youtu.be/8QlS6L--Hic?si=pDTa_XyIbnLle6FW)
-- LQR.
-- Video has swing up, but I am keeping it simple:
-- Weights used: $Q=\mathrm{diag}(1,\,1,\,10,\,100), R=10$.
-- Continuous-time [solved](https://www.youtube.com/watch?v=ZktL3YjTbB4) and [CARE](https://en.wikipedia.org/wiki/Algebraic_Riccati_equation) in [python](https://python-control.readthedocs.io/en/0.10.2/generated/control.care.html) with their [implementation](https://github.com/python-control/python-control/blob/0.10.2/control/mateqn.py#L397):
-
-$$
-A^\top P + P A - P B R^{-1} B^\top P + Q = 0.
-$$
-
-- Optimal gain and control law (For continuous):
-
-$$
-K = R^{-1} B^\top P,\quad u = -K\,\bigl(x - x_{\mathrm{ref}}\bigr),\quad x_{\mathrm{ref}}=\mathbf{0}.
-$$
-
+This [derivation](https://youtu.be/8QlS6L--Hic?si=pDTa_XyIbnLle6FW) and associated matlab code, attached here under `references/MATLAB` for convenience, was used to implement the LQR, including the following [references](https://python-control.readthedocs.io/en/0.10.2/generated/control.dare.html) for python implementations on the discrete Riccati equation solution.
