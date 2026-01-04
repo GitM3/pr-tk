@@ -5,6 +5,7 @@ from dynamics.inverted_pendulum import InvertedPendulumCart
 from estimation.ekf import EKF
 from plotting.plotting import (
     animate_cart_pendulum,
+    plot_control_comparison,
     plot_ekf_statistics,
     plot_imu_ekf_errors,
     plot_imu_vs_ekf,
@@ -276,12 +277,22 @@ def run_simulate_full(system, T, dt):
         u_limit=50.0,
         alpha=1.0,
     )
-    x0 = np.array([0.0, 0.0, np.deg2rad(5), 0.0])
+    x0 = np.array([0.0, 0.0, np.deg2rad(45), 0.0])
     ekf_results = simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=lqr)
     imu.reset()
-    results = simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=lqr)
-    plot_imu_vs_ekf(system, imu, results)
+    imu_results = simulate_with_imu(system, imu, encoder, x0, T, dt, controller=lqr)
+    plot_imu_vs_ekf(system, imu, ekf_results)
     plot_imu_ekf_errors(ekf_results)
+    plot_control_comparison(ekf_results, imu_results)
+    animate_cart_pendulum(
+        ekf_results["time"],
+        ekf_results["x_meas"],
+        L,
+        trace=True,
+        trace_length=200,
+        state_est_history=imu_results["x_meas"],
+        est_trace=True,
+    )
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ def animate_cart_pendulum(
     (bob_point,) = ax.plot([], [], "ro", markersize=6)
 
     if trace:
-        (trace_line,) = ax.plot([], [], "r--", lw=1, alpha=0.1, label="True tip")
+        (trace_line,) = ax.plot([], [], "r--", lw=1, alpha=0.8, label="True tip")
     else:
         trace_line = None
 
@@ -385,6 +385,30 @@ def plot_ekf_statistics(
     plt.grid(True)
     if n - split_idx > 0:
         plt.legend(ncol=4, fontsize=9)
+    plt.legend()
+
+    plt.tight_layout()
+    if return_fig:
+        return fig
+    plt.show()
+
+
+def plot_control_comparison(
+    ekf_results: dict,
+    imu_results: dict,
+    return_fig: bool = False,
+):
+    time = ekf_results["time"]
+    u_ekf = ekf_results["u"]
+    u_imu = imu_results["u"]
+
+    fig = plt.figure(figsize=(12, 6))
+
+    plt.plot(time, u_ekf, label="EKF control")
+    plt.plot(time, u_imu, label="IMU-only control", alpha=0.7)
+    plt.ylabel("u")
+    plt.title("Control Signal Comparison")
+    plt.grid(True)
     plt.legend()
 
     plt.tight_layout()
