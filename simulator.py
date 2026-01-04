@@ -315,48 +315,16 @@ if __name__ == "__main__":
     #     est_trace=True,
     # )
     # # WITHOUT EKF
-    # lqr = LQRController(
-    #     system,
-    #     Q=np.diag([1.0, 1.0, 10.0, 100.0]),
-    #     R=np.array([[10.0]]),
-    #     x_ref=np.array([0.0, 0.0, 0.0, 0.0]),
-    #     u_limit=50.0,
-    #     alpha=1.0,
-    # )
-    # imu = IMU()
-    # (
-    #     time,
-    #     state_hist,
-    #     est_hist,
-    #     theta_t,
-    #     theta_m,
-    #     omega_t,
-    #     omega_m,
-    #     acc_t,
-    #     acc_m,
-    #     u_hist,
-    # ) = simulate_with_imu(system, imu, x0, T, dt, controller=lqr)
-    #
-    # animate_cart_pendulum(
-    #     time,
-    #     state_hist,
-    #     L,
-    #     trace=True,
-    #     trace_length=200,
-    #     state_est_history=est_hist,
-    #     est_trace=True,
-    # )
-
     x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
-    imu = IMU()
     lqr = LQRController(
         system,
-        Q=np.diag([1.0, 1.0, 10.0, 10.0]),
+        Q=np.diag([1.0, 1.0, 10.0, 100.0]),
         R=np.array([[10.0]]),
-        x_ref=np.array([3.5, 0.0, 0.0, 0.0]),
+        x_ref=np.array([0.0, 0.0, 0.0, 0.0]),
         u_limit=50.0,
         alpha=1.0,
     )
+    imu = IMU()
     (
         time,
         state_hist,
@@ -368,40 +336,73 @@ if __name__ == "__main__":
         acc_t,
         acc_m,
         u_hist,
-        stats,
-    ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
-
-    state_labels = ["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
-    meas_labels = ["omega", "acc_x", "acc_y"]
-    plot_kalman_gain(
-        time, stats["K_hist"], meas_labels=meas_labels, state_labels=state_labels
-    )
-    plot_ekf_statistics(
-        time,
-        P_diag=stats["P_diag_hist"],
-        meas_labels=meas_labels,
-        state_labels=state_labels,
-    )
-
-    plot_imu_ekf_error_overlay(
-        time=time,
-        system=system,
-        imu=imu,
-        x_true=state_hist,
-        x_ekf=est_hist,
-        theta_gyro=theta_m,
-        omega_meas=omega_m,
-        acc_true_body=acc_t,
-        acc_meas=acc_m,
-        u_hist=u_hist,
-    )
+    ) = simulate_with_imu(system, imu, x0, T, dt, controller=lqr)
 
     animate_cart_pendulum(
         time,
         state_hist,
         L,
         trace=True,
-        trace_length=100,
+        trace_length=200,
         state_est_history=est_hist,
         est_trace=True,
     )
+
+    # x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
+    # imu = IMU()
+    # lqr = LQRController(
+    #     system,
+    #     Q=np.diag([1.0, 1.0, 10.0, 10.0]),
+    #     R=np.array([[10.0]]),
+    #     x_ref=np.array([3.5, 0.0, 0.0, 0.0]),
+    #     u_limit=50.0,
+    #     alpha=1.0,
+    # )
+    # (
+    #     time,
+    #     state_hist,
+    #     est_hist,
+    #     theta_t,
+    #     theta_m,
+    #     omega_t,
+    #     omega_m,
+    #     acc_t,
+    #     acc_m,
+    #     u_hist,
+    #     stats,
+    # ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
+    #
+    # state_labels = ["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
+    # meas_labels = ["omega", "acc_x", "acc_y"]
+    # plot_kalman_gain(
+    #     time, stats["K_hist"], meas_labels=meas_labels, state_labels=state_labels
+    # )
+    # plot_ekf_statistics(
+    #     time,
+    #     P_diag=stats["P_diag_hist"],
+    #     meas_labels=meas_labels,
+    #     state_labels=state_labels,
+    # )
+    #
+    # plot_imu_ekf_error_overlay(
+    #     time=time,
+    #     system=system,
+    #     imu=imu,
+    #     x_true=state_hist,
+    #     x_ekf=est_hist,
+    #     theta_gyro=theta_m,
+    #     omega_meas=omega_m,
+    #     acc_true_body=acc_t,
+    #     acc_meas=acc_m,
+    #     u_hist=u_hist,
+    # )
+    #
+    # animate_cart_pendulum(
+    #     time,
+    #     state_hist,
+    #     L,
+    #     trace=True,
+    #     trace_length=100,
+    #     state_est_history=est_hist,
+    #     est_trace=True,
+    # )
