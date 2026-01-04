@@ -101,7 +101,101 @@ def f_disc(x, u):
     return np.hstack([s_next, b])
 
 
-def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
+def simulate_with_ekf(system, imu, encoder, x0, T, dt, controller=None):
+    N = int(T / dt)
+    time = np.linspace(0, T, N)
+    g_world = imu.g_world
+
+    def h_meas(x, u):
+        x_pos, x_dot, theta, theta_dot = x[:4]
+        b_g, b_ax, b_ay = x[4:]
+
+        x_dot_d, x_ddot, theta_dot_d, theta_ddot = system.dynamics(x[:4], u)
+        _, a_tip = system.tip_kinematics(x[:4], x_ddot, theta_ddot)
+
+        acc_body = rot2d(theta).T @ (a_tip - g_world)
+
+        return np.array(
+            [
+                x_pos,
+                x_dot,
+                theta_dot + b_g,
+                acc_body[0] + b_ax,
+                acc_body[1] + b_ay,
+            ]
+        )
+
+    x = x0.copy()
+    state_hist = np.zeros((N, len(x0)))
+    est_hist = np.zeros((N, len(x0)))
+
+    acc_true_log = np.zeros((N, 2))
+    acc_meas_log = np.zeros((N, 2))
+    u_hist = np.zeros(N)
+    theta_meas = x0[2]
+
+    Q = np.diag(
+        [
+            encoder.x_noise_std**2,
+            encoder.x_dot_noise_std**2,
+            imu.gyro_noise_std**2,
+            imu.accel_noise_std**2,
+            imu.accel_noise_std**2,
+        ]
+    )
+    # Process noise for [x, x_dot, theta, theta_dot, b_g, b_ax, b_ay]
+    R = np.diag([1e-5, 1e-3, 1e-6, 1e-3, 1e-8, 1e-6, 1e-6])
+
+    ekf = EKF(
+        g_motion=f_disc,
+        h_meas=h_meas,
+        R_t=R,
+        Q_t=Q,
+        state_dim=7,
+        meas_dim=5,
+        eps_jac=1e-6,
+    )
+    x_hat = np.hstack([x0.copy(), np.array([0.0, 0.0, 0.0])])
+    P = np.diag([1e-2, 1e-1, 1e-3, 1e-1, 1e-2, 1e-1, 1e-1])
+    K_hist = np.zeros((N, 7, 5))
+    P_diag_hist = np.zeros((N, 7))
+
+    for k in range(N):
+        u = controller(x_hat[:4], time[k]) if controller else 0.0
+        x = rk4_step(system.dynamics, x, u, dt)
+
+        x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(x, u)
+        v_tip, a_tip = system.tip_kinematics(x, x_ddot, theta_ddot)
+
+        x_enc, x_dot_enc = encoder.measure(x[0], x[1])
+        omega_meas, acc_meas = imu.measure(
+            theta=x[2], theta_dot=theta_dot, a_world=a_tip, dt=dt
+        )
+        theta_meas = theta_meas + omega_meas * dt
+        z = np.array([x_enc, x_dot_enc, omega_meas, acc_meas[0], acc_meas[1]])
+        x_hat, P, _, _, K, _, _ = ekf.step(x_hat, P, z, u)
+
+        P_diag_hist[k] = np.diag(P)
+        K_hist[k] = K
+        u_hist[k] = u
+        state_hist[k] = x
+        acc_true_log[k] = rot2d(x[2]).T @ (a_tip - imu.g_world)
+        acc_meas_log[k] = acc_meas
+        est_hist[k] = x_hat[:4]
+
+    return {
+        "time": time,
+        "x_true": state_hist,
+        "x_meas": est_hist,
+        "acc_true": acc_true_log,
+        "acc_meas": acc_meas_log,
+        "u": u_hist,
+        "K": K_hist,
+        "P": P_diag_hist,
+    }
+
+
+def simulate_with_ekf_old(system, imu, x0, T, dt, controller=None):
     N = int(T / dt)
     time = np.linspace(0, T, N)
 
@@ -147,8 +241,6 @@ def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
     u_hist = np.zeros(N)
 
     K_hist = np.zeros((N, 7, 3))
-    innov_hist = np.zeros((N, 3))
-    nis_hist = np.zeros(N)
     P_diag_hist = np.zeros((N, 7))
 
     for k in range(N):
@@ -224,6 +316,29 @@ def run_simulate_imu_only(system, T, dt):
     )
 
 
+def run_simulate_ekf_only(system, T, dt):
+    """
+    Without LQR controller
+    """
+    imu = IMU()
+    encoder = WheelEncoder()
+    # x  # x_dot  # theta  # theta_dot
+    x0 = np.array([0.0, 0.0, np.deg2rad(5), 0.0])
+    results = simulate_with_ekf(system, imu, encoder, x0, T, dt)
+    plot_true_vs_meas(
+        time=results["time"], x_true=results["x_true"], x_meas=results["x_meas"]
+    )
+    animate_cart_pendulum(
+        results["time"],
+        results["x_true"],
+        L,
+        trace=True,
+        trace_length=200,
+        state_est_history=results["x_meas"],
+        est_trace=True,
+    )
+
+
 if __name__ == "__main__":
     M = 1.0
     m = 0.2  # TODO: butler bot params
@@ -233,7 +348,8 @@ if __name__ == "__main__":
     T = 5.0
     dt = 0.01
 
-    run_simulate_imu_only(system, T, dt)
+    # run_simulate_imu_only(system, T, dt)
+    run_simulate_ekf_only(system, T, dt)
     # # # WITHOUT EKF
     # x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
     # lqr = LQRController(

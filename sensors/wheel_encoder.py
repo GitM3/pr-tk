@@ -9,13 +9,13 @@ class WheelEncoder:
         vel_noise_std: float = 5e-3,
         seed: int | None = None,
     ):
-        self.pos_noise_std = pos_noise_std
-        self.vel_noise_std = vel_noise_std
+        self.x_noise_std = pos_noise_std
+        self.x_dot_noise_std = vel_noise_std
         self.rng = np.random.default_rng(seed)
 
     def measure(self, x: float, x_dot: float):
-        x_meas = x + self.rng.normal(0.0, self.pos_noise_std)
-        x_dot_meas = x_dot + self.rng.normal(0.0, self.vel_noise_std)
+        x_meas = x + self.rng.normal(0.0, self.x_noise_std)
+        x_dot_meas = x_dot + self.rng.normal(0.0, self.x_dot_noise_std)
         return x_meas, x_dot_meas
 
 
