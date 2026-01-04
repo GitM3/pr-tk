@@ -136,7 +136,7 @@ def animate_cart_pendulum(
     plt.show()
 
 
-def plot_true_vs_meas(time, x_true, x_meas, u=None):
+def plot_true_vs_meas(time, x_true, x_meas, u=None, return_fig: bool = False):
     """
     x_true: (N, 4) [x, x_dot, theta, theta_dot]
     x_meas: (N, 4)
@@ -167,6 +167,8 @@ def plot_true_vs_meas(time, x_true, x_meas, u=None):
         ax_u.legend(loc="lower right")
 
     plt.tight_layout()
+    if return_fig:
+        return fig
     plt.show()
 
 
