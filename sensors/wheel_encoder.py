@@ -7,7 +7,7 @@ class WheelEncoder:
         self,
         pos_noise_std: float = 1e-3,
         vel_noise_std: float = 5e-3,
-        seed: int | None = None,
+        seed=69,
     ):
         self.x_noise_std = pos_noise_std
         self.x_dot_noise_std = vel_noise_std

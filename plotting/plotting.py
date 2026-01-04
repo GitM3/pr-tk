@@ -23,10 +23,8 @@ def animate_cart_pendulum(
     if state_est_history is not None:
         x_cart_est = state_est_history[:, 0]
         theta_est = state_est_history[:, 2]
-        pend_x_est = x_cart + L * np.sin(theta_est)
         pend_y_est = L * np.cos(theta_est)
-        # pend_x_est = x_cart_est + L * np.sin(theta_est) # TODO: if wheel decoder needed add x_est back
-        # pend_y_est = L * np.cos(theta_est)
+        pend_x_est = x_cart_est + L * np.sin(theta_est)
     else:
         pend_x_est = pend_y_est = None
 
@@ -45,12 +43,12 @@ def animate_cart_pendulum(
     (bob_point,) = ax.plot([], [], "ro", markersize=6)
 
     if trace:
-        (trace_line,) = ax.plot([], [], "b--", lw=1, alpha=0.6, label="True tip")
+        (trace_line,) = ax.plot([], [], "r--", lw=1, alpha=0.1, label="True tip")
     else:
         trace_line = None
 
     if state_est_history is not None and est_trace:
-        (est_trace_line,) = ax.plot([], [], "g--", lw=1, alpha=0.6, label="EKF tip")
+        (est_trace_line,) = ax.plot([], [], "b--", lw=1, alpha=0.8, label="EKF tip")
     else:
         est_trace_line = None
 

@@ -13,9 +13,10 @@ class IMU:
         gyro_bias=0.02,
         accel_bias=np.array([0.1, -0.05]),
         gyro_noise_std=0.001,
-        gyro_bg_rw_std=0.01,
+        gyro_bg_rw_std=0.1,
         accel_noise_std=0.1,
         gravity=9.81,
+        seed=100,
     ):
 
         self.bg0 = gyro_bias
@@ -25,20 +26,26 @@ class IMU:
         self.gyro_noise_std = gyro_noise_std
         self.accel_noise_std = accel_noise_std
         self.g_world = np.array([0.0, -1 * gravity])
+        self.seed = seed
+        self.rng = np.random.default_rng(seed)
 
     def measure(self, theta, theta_dot, a_world, dt):
         omega_true = theta_dot
-        omega_meas = omega_true + self.bg + np.random.randn() * self.gyro_noise_std
+        omega_meas = omega_true + self.bg + self.rng.normal(0.0, self.gyro_noise_std)
 
         accel_true_body = rot2d(theta).T @ (a_world - self.g_world)
         accel_meas = (
-            accel_true_body + self.ba + np.random.randn(2) * self.accel_noise_std
+            accel_true_body
+            + self.ba
+            + self.rng.normal(0.0, self.accel_noise_std, size=2)
         )
-        self.bg += np.random.randn() * np.sqrt(dt) * self.bg_rw_std
+
+        self.bg += self.rng.normal(0.0, self.bg_rw_std * np.sqrt(dt))
         return omega_meas, accel_meas
 
     def reset(self):
         self.bg = self.bg0
+        self.rng = np.random.default_rng(self.seed)
 
 
 if __name__ == "__main__":
