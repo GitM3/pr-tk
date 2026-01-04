@@ -26,15 +26,7 @@ Compared to naive IMU integration for the state estimate, the EKF reduces RMSE e
 
 ## Implementation Details
 ### IMU sensor
-Reference for the gyroscope and accelerometer [model](https://arxiv.org/pdf/2307.11758) was used and the ground truth pose is:
-
-```math
-\mathbf{p}_k = \begin{bmatrix} x_k \\ y_k \end{bmatrix},
-\quad
-\mathbf{v}_k = \begin{bmatrix} v_{x,k} \\ v_{y,k} \end{bmatrix},
-\quad
-\theta_k \in \mathbb{R}
-```
+Reference for the gyroscope and accelerometer [model](https://arxiv.org/pdf/2307.11758) shows several complex modeling options, but for simplicity only the additive noise and random bias walk was chosen.
 
 #### Gyro Model
 - Measures the angular velocity of the pendulum tip.
@@ -51,7 +43,10 @@ Reference for the gyroscope and accelerometer [model](https://arxiv.org/pdf/2307
 ```
 - Where gravity $\mathbf{g}^W=[0,-g]^T$
 - $R(\theta_k)$ is the 2D cartesian rotation matrix.
-- The accelerometer bias follows a random walk: $\mathbf{b}_{a,k+1}=\mathbf{b}_{a,k}+\eta_{ba}$.
+- The accelerometer bias follows a random walk:
+```math
+  \mathbf{b}_{a,k+1}=\mathbf{b}_{a,k}+\eta_{ba}
+```
 - where
 ```math
 \mathbf{a}^W_k=\frac{\mathbf{v}_{k+1} - \mathbf{v}_k}{\Delta t}
@@ -88,32 +83,37 @@ IMU at the tip measures angular rate and specific force in the body frame and si
 
 Since the IMU alone cannot infer the $x$ position, a simple wheel encoder sensor is modeled to give noisy location estimates. Of course this does not model wheel slipage, but can easily be added later.
 ![](figures/wheel.png)
+
 As a result the measurement model is
 
 ```math
-\begin{align}
 \mathbf{z}_k = \mathbf{h}(\mathbf{x}_k, u_k) + \mathbf{\delta}_k,\quad
-\mathbf{h}(\mathbf{x},u) = \begin{bmatrix}
-x \\
-\dot{x} \\
-\dot{\theta} + b_g \\
-\big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax} \\
+\mathbf{h}(\mathbf{x},u) = \left[\begin{matrix} 
+x, &
+\dot{x}, &
+\dot{\theta} + b_g, &
+\big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_x + b_{ax}, &
 \big(R(\theta)^\top(\mathbf{a}_\text{tip}-\mathbf{g}^W)\big)_y + b_{ay}
-\end{bmatrix}.
-\end{align}
+\end{matrix}\right]
 ```
 
 Process and measurement noises are modeled Gaussian as mentioned before.
 
 ```math
-\mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_t),\quad \mathbf{v}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_t),
+\mathbf{\delta}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_t),
 ```
-with $\mathbf{R}_t=\operatorname{diag}(q_x, q_{\dot{x}}, q_\theta, q_{\dot{\theta}}, q_{b_g}, q_{b_{ax}}, q_{b_{ay}})$ and $\mathbf{Q}_t=\operatorname{diag}(\sigma_x^2,\sigma_{\dot{x}}^2,\sigma_\omega^2,\sigma_a^2,\sigma_a^2)$.
-
+with 
+```math
+\mathbf{R}_t=\text{diag}(q_x, q_{\dot{x}}, q_\theta, q_{\dot{\theta}}, q_{b_g}, q_{b_{ax}}, q_{b_{ay}})
+```
+ and 
+ ```math
+ \mathbf{Q}_t=\text{diag}(\sigma_x^2,\sigma_{\dot{x}}^2,\sigma_\omega^2,\sigma_a^2,\sigma_a^2).
+```
 ### EKF with Numerical Linearization
 - Reference: Probabilistic Robotics.
 
-At time $t$, given estimate $(\mu_{t-1}, \Sigma_{t-1})$, input $u_t$, and measurement $z_t$:
+At time $t$, given estimate $(\mu_{t-1}, \Sigma_{t-1})$, input $u_t$, and measurement $z_t$, the process dynamics and measurement equations described above (here as $g$ and $h$)
 
 Prediction (motion update)
 
@@ -177,7 +177,7 @@ Without the wheel encoder, there is no observation on the $x$ state, so there is
 ![](figures/ekf-pendulum.gif)
 
 Additionally if motion is aggressive, linearization errors will occur, which is a known limit of the EKF. However, with the wheel encoder added, the state estimation is accurate:
-![](figures/ekf-swing.gif)
+![](figures/ekf_swing.gif)
 
 ## LQR
 The LQR controller is standard and included mainly for stabilization comparisons. The control law is:
