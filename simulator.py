@@ -11,6 +11,7 @@ from plotting.plotting import (
     plot_kalman_gain,
 )
 from sensors.imu import IMU, rot2d
+from sensors.wheel_encoder import WheelEncoder
 
 
 def rk4_step(f, x, u, dt):
@@ -46,48 +47,48 @@ def integrate_gyro(omega_meas, theta0, dt):
     return theta_imu
 
 
-def simulate_with_imu(system, imu, x0, T, dt, controller=None, progress=None):
+def simulate_with_imu(system, imu, encoder, x0, T, dt, controller=None):
     N = int(T / dt)
     time = np.linspace(0, T, N)
 
     x = x0.copy()
+    x_hat = x0.copy()  # Prior unrealistic?
     state_hist = np.zeros((N, len(x0)))
+    est_hist = np.zeros((N, len(x0)))
 
     theta_true_log = np.zeros(N)
+    theta_meas_log = np.zeros(N)
     omega_true_log = np.zeros(N)
     omega_meas_log = np.zeros(N)
     acc_true_log = np.zeros((N, 2))
     acc_meas_log = np.zeros((N, 2))
     u_hist = np.zeros(N)
+    theta_meas = x0[2]
 
     for k in range(N):
-        u = controller(x, time[k]) if controller else 0.0
-        u_hist[k] = u
-        state_hist[k] = x
+        u = controller(x_hat[:4], time[k]) if controller else 0.0
+        x = rk4_step(system.dynamics, x, u, dt)
 
         x_dot, x_ddot, theta_dot, theta_ddot = system.dynamics(x, u)
         v_tip, a_tip = system.tip_kinematics(x, x_ddot, theta_ddot)
-        theta = x[2]
+
+        x_enc, x_dot_enc = encoder.measure(x[0], x[1])
         omega_meas, acc_meas = imu.measure(
-            theta=theta, theta_dot=theta_dot, a_world=a_tip
+            theta=x[2], theta_dot=theta_dot, a_world=a_tip
         )
-        theta_true_log[k] = theta
+        theta_meas = theta_meas + omega_meas * dt
+
+        x_hat = np.array([x_enc, x_dot_enc, theta_meas, omega_meas])
+
+        u_hist[k] = u
+        state_hist[k] = x
+        theta_true_log[k] = x[2]
+        theta_meas_log[k] = theta_meas
         omega_true_log[k] = theta_dot
         omega_meas_log[k] = omega_meas
         acc_true_log[k] = rot2d(x[2]).T @ (a_tip - imu.g_world)
         acc_meas_log[k] = acc_meas
-
-        # Integrate plant forward
-        x = rk4_step(system.dynamics, x, u, dt)
-        if progress is not None:
-            try:
-                progress(k + 1, N)
-            except Exception:
-                pass
-    theta_meas_log = integrate_gyro(omega_meas_log, theta_true_log[0], dt)
-    theta_meas = theta_meas_log.reshape(-1, 1)
-    x_meas = np.zeros(N).reshape(-1, 1)  # X not measured
-    est_hist = np.hstack([x_meas, theta_meas, omega_meas_log.reshape(-1, 1)])
+        est_hist[k] = x_hat
 
     return (
         time,
@@ -111,7 +112,7 @@ def f_disc(x, u):
     return np.hstack([s_next, b])
 
 
-def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None, progress=None):
+def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
     N = int(T / dt)
     time = np.linspace(0, T, N)
 
@@ -189,12 +190,6 @@ def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None, progress=
 
         # plant forward
         x = rk4_step(system.dynamics, x, u, dt)
-        if progress is not None:
-            try:
-                progress(k + 1, N)
-            except Exception:
-                pass
-
     theta_meas_log = integrate_gyro(omega_meas_log, theta_true_log[0], dt)
 
     base = (
@@ -217,6 +212,26 @@ def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None, progress=
     return base + (stats,)
 
 
+def run_simulate_imu_only(system, T, dt):
+    imu = IMU()
+    encoder = WheelEncoder()
+    # x  # x_dot  # theta  # theta_dot
+    x0 = np.array([0.0, 0.0, np.deg2rad(1), 0.0])
+    # WITHOUT CONTROLLER AND EKF:
+    (
+        time,
+        state_hist,
+        est_hist,
+        theta_t,
+        theta_m,
+        omega_t,
+        omega_m,
+        acc_t,
+        acc_m,
+        u_hist,
+    ) = simulate_with_imu(system, imu, encoder, x0, T, dt)
+
+
 if __name__ == "__main__":
     M = 1.0
     m = 0.2  # TODO: butler bot params
@@ -226,37 +241,9 @@ if __name__ == "__main__":
     T = 5.0
     dt = 0.01
 
-    # imu = IMU()
-    # x  # x_dot  # theta  # theta_dot
-    # x0 = np.array([0.0, 0.0, np.deg2rad(1), 0.0])
-    # # WITHOUT CONTROLLER:
-    # (
-    #     time,
-    #     state_hist,
-    #     est_hist,
-    #     theta_t,
-    #     theta_m,
-    #     omega_t,
-    #     omega_m,
-    #     acc_t,
-    #     acc_m,
-    #     u_hist,
-    # ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt)
-    #
-    # plot_imu_ekf_vs_truth(
-    #     time=time,
-    #     system=system,
-    #     imu=imu,
-    #     x_true=state_hist,
-    #     x_ekf=est_hist,
-    #     theta_gyro=theta_m,
-    #     omega_meas=omega_m,
-    #     acc_true_body=acc_t,
-    #     acc_meas=acc_m,
-    #     u_hist=u_hist,
-    # )
-
-    # # WITH controller
+    run_simulate_imu_only(system, T, dt)
+    # # # WITHOUT EKF
+    # x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
     # lqr = LQRController(
     #     system,
     #     Q=np.diag([1.0, 1.0, 10.0, 100.0]),
@@ -277,33 +264,7 @@ if __name__ == "__main__":
     #     acc_t,
     #     acc_m,
     #     u_hist,
-    # ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
-    #
-    # plot_imu_ekf_vs_truth(
-    #     time=time,
-    #     system=system,
-    #     imu=imu,
-    #     x_true=state_hist,
-    #     x_ekf=est_hist,
-    #     theta_gyro=theta_m,
-    #     omega_meas=omega_m,
-    #     acc_true_body=acc_t,
-    #     acc_meas=acc_m,
-    #     u_hist=u_hist,
-    # )
-    #
-    # plot_imu_ekf_error_overlay(
-    #     time=time,
-    #     system=system,
-    #     imu=imu,
-    #     x_true=state_hist,
-    #     x_ekf=est_hist,
-    #     theta_gyro=theta_m,
-    #     omega_meas=omega_m,
-    #     acc_true_body=acc_t,
-    #     acc_meas=acc_m,
-    #     u_hist=u_hist,
-    # )
+    # ) = simulate_with_imu(system, imu, x0, T, dt, controller=lqr)
     #
     # animate_cart_pendulum(
     #     time,
@@ -314,39 +275,6 @@ if __name__ == "__main__":
     #     state_est_history=est_hist,
     #     est_trace=True,
     # )
-    # # WITHOUT EKF
-    x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
-    lqr = LQRController(
-        system,
-        Q=np.diag([1.0, 1.0, 10.0, 100.0]),
-        R=np.array([[10.0]]),
-        x_ref=np.array([0.0, 0.0, 0.0, 0.0]),
-        u_limit=50.0,
-        alpha=1.0,
-    )
-    imu = IMU()
-    (
-        time,
-        state_hist,
-        est_hist,
-        theta_t,
-        theta_m,
-        omega_t,
-        omega_m,
-        acc_t,
-        acc_m,
-        u_hist,
-    ) = simulate_with_imu(system, imu, x0, T, dt, controller=lqr)
-
-    animate_cart_pendulum(
-        time,
-        state_hist,
-        L,
-        trace=True,
-        trace_length=200,
-        state_est_history=est_hist,
-        est_trace=True,
-    )
 
     # x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
     # imu = IMU()
