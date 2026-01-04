@@ -12,16 +12,19 @@ class IMU:
         self,
         gyro_bias=0.02,
         accel_bias=np.array([0.1, -0.05]),
-        gyro_noise_std=0.001,
+        gyro_noise_std=0.01,
         gyro_bg_rw_std=0.1,
-        accel_noise_std=0.1,
+        acc_bg_rw_std=0.1,
+        accel_noise_std=0.2,
         gravity=9.81,
         seed=100,
     ):
 
         self.bg0 = gyro_bias
+        self.ba0 = accel_bias
         self.bg = gyro_bias
         self.bg_rw_std = gyro_bg_rw_std
+        self.ba_rw_std = acc_bg_rw_std
         self.ba = accel_bias
         self.gyro_noise_std = gyro_noise_std
         self.accel_noise_std = accel_noise_std
@@ -41,10 +44,12 @@ class IMU:
         )
 
         self.bg += self.rng.normal(0.0, self.bg_rw_std * np.sqrt(dt))
+        self.ba += self.rng.normal(0.0, self.ba_rw_std * np.sqrt(dt))
         return omega_meas, accel_meas
 
     def reset(self):
         self.bg = self.bg0
+        self.ba = self.ba0
         self.rng = np.random.default_rng(self.seed)
 
 

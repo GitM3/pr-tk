@@ -241,6 +241,20 @@ def run_simulate_ekf_only(system, T, dt):
         state_est_history=results["x_meas"],
         est_trace=True,
     )
+    state_labels = ["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
+    meas_labels = ["x", "x_dot", "omega", "acc_x", "acc_y"]
+    plot_kalman_gain(
+        results["time"],
+        results["K"],
+        meas_labels=meas_labels,
+        state_labels=state_labels,
+    )
+    plot_ekf_statistics(
+        results["time"],
+        P_diag=results["P"],
+        meas_labels=meas_labels,
+        state_labels=state_labels,
+    )
 
 
 if __name__ == "__main__":
@@ -252,7 +266,7 @@ if __name__ == "__main__":
     T = 10.0
     dt = 0.01
 
-    run_simulate_imu_only(system, T, dt)
+    # run_simulate_imu_only(system, T, dt)
     run_simulate_ekf_only(system, T, dt)
 
     # x0 = np.array([0.0, -0.5, np.deg2rad(45), -0.01])
@@ -279,17 +293,6 @@ if __name__ == "__main__":
     #     stats,
     # ) = simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=lqr)
     #
-    # state_labels = ["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
-    # meas_labels = ["omega", "acc_x", "acc_y"]
-    # plot_kalman_gain(
-    #     time, stats["K_hist"], meas_labels=meas_labels, state_labels=state_labels
-    # )
-    # plot_ekf_statistics(
-    #     time,
-    #     P_diag=stats["P_diag_hist"],
-    #     meas_labels=meas_labels,
-    #     state_labels=state_labels,
-    # )
     #
     # plot_imu_ekf_error_overlay(
     #     time=time,
