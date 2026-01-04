@@ -9,6 +9,7 @@ from plotting.plotting import (
     plot_imu_ekf_error_overlay,
     plot_imu_ekf_vs_truth,
     plot_kalman_gain,
+    plot_true_vs_meas,
 )
 from sensors.imu import IMU, rot2d
 from sensors.wheel_encoder import WheelEncoder
@@ -56,10 +57,6 @@ def simulate_with_imu(system, imu, encoder, x0, T, dt, controller=None):
     state_hist = np.zeros((N, len(x0)))
     est_hist = np.zeros((N, len(x0)))
 
-    theta_true_log = np.zeros(N)
-    theta_meas_log = np.zeros(N)
-    omega_true_log = np.zeros(N)
-    omega_meas_log = np.zeros(N)
     acc_true_log = np.zeros((N, 2))
     acc_meas_log = np.zeros((N, 2))
     u_hist = np.zeros(N)
@@ -82,26 +79,18 @@ def simulate_with_imu(system, imu, encoder, x0, T, dt, controller=None):
 
         u_hist[k] = u
         state_hist[k] = x
-        theta_true_log[k] = x[2]
-        theta_meas_log[k] = theta_meas
-        omega_true_log[k] = theta_dot
-        omega_meas_log[k] = omega_meas
         acc_true_log[k] = rot2d(x[2]).T @ (a_tip - imu.g_world)
         acc_meas_log[k] = acc_meas
         est_hist[k] = x_hat
 
-    return (
-        time,
-        state_hist,
-        est_hist,
-        theta_true_log,
-        theta_meas_log,
-        omega_true_log,
-        omega_meas_log,
-        acc_true_log,
-        acc_meas_log,
-        u_hist,
-    )
+    return {
+        "time": time,
+        "x_true": state_hist,
+        "x_meas": est_hist,
+        "acc_true": acc_true_log,
+        "acc_meas": acc_meas_log,
+        "u": u_hist,
+    }
 
 
 def f_disc(x, u):
@@ -213,23 +202,17 @@ def simulate_with_imu_and_ekf(system, imu, x0, T, dt, controller=None):
 
 
 def run_simulate_imu_only(system, T, dt):
+    """
+    Without EKF or LQR controller
+    """
     imu = IMU()
     encoder = WheelEncoder()
     # x  # x_dot  # theta  # theta_dot
     x0 = np.array([0.0, 0.0, np.deg2rad(1), 0.0])
-    # WITHOUT CONTROLLER AND EKF:
-    (
-        time,
-        state_hist,
-        est_hist,
-        theta_t,
-        theta_m,
-        omega_t,
-        omega_m,
-        acc_t,
-        acc_m,
-        u_hist,
-    ) = simulate_with_imu(system, imu, encoder, x0, T, dt)
+    results = simulate_with_imu(system, imu, encoder, x0, T, dt)
+    plot_true_vs_meas(
+        time=results["time"], x_true=results["x_true"], x_meas=results["x_meas"]
+    )
 
 
 if __name__ == "__main__":

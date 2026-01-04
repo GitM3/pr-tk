@@ -138,6 +138,40 @@ def animate_cart_pendulum(
     plt.show()
 
 
+def plot_true_vs_meas(time, x_true, x_meas, u=None):
+    """
+    x_true: (N, 4) [x, x_dot, theta, theta_dot]
+    x_meas: (N, 4)
+    """
+
+    labels = [
+        ("x", "Position [m]"),
+        ("x_dot", "Velocity [m/s]"),
+        ("theta", "Angle [rad]"),
+        ("theta_dot", "Angular rate [rad/s]"),
+    ]
+
+    fig, axs = plt.subplots(4, 1, sharex=True, figsize=(9, 10))
+
+    for i, (name, ylabel) in enumerate(labels):
+        axs[i].plot(time, x_true[:, i], label=f"true {name}")
+        axs[i].plot(time, x_meas[:, i], "--", label=f"measured {name}")
+        axs[i].set_ylabel(ylabel)
+        axs[i].grid(True)
+        axs[i].legend()
+
+    axs[-1].set_xlabel("Time [s]")
+
+    if u is not None:
+        ax_u = axs[-1].twinx()
+        ax_u.plot(time, u, "k:", alpha=0.4, label="control u")
+        ax_u.set_ylabel("Control")
+        ax_u.legend(loc="lower right")
+
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_imu_ekf_vs_truth(
     time,
     system,
