@@ -71,7 +71,7 @@ def simulate_with_imu(system, imu, encoder, x0, T, dt, controller=None):
 
         x_enc, x_dot_enc = encoder.measure(x[0], x[1])
         omega_meas, acc_meas = imu.measure(
-            theta=x[2], theta_dot=theta_dot, a_world=a_tip
+            theta=x[2], theta_dot=theta_dot, a_world=a_tip, dt=dt
         )
         theta_meas = theta_meas + omega_meas * dt
 
@@ -212,6 +212,15 @@ def run_simulate_imu_only(system, T, dt):
     results = simulate_with_imu(system, imu, encoder, x0, T, dt)
     plot_true_vs_meas(
         time=results["time"], x_true=results["x_true"], x_meas=results["x_meas"]
+    )
+    animate_cart_pendulum(
+        results["time"],
+        results["x_true"],
+        L,
+        trace=True,
+        trace_length=200,
+        state_est_history=results["x_meas"],
+        est_trace=True,
     )
 
 
