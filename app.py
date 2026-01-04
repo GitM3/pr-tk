@@ -8,9 +8,11 @@ import simulator as sim
 from controller.lqr import LQRController
 from dynamics.inverted_pendulum import InvertedPendulumCart
 from sensors.imu import IMU
+from sensors.wheel_encoder import WheelEncoder
 from plotting.plotting import (
-    plot_imu_ekf_vs_truth,
-    plot_imu_ekf_error_overlay,
+    plot_imu_ekf_errors,
+    plot_imu_vs_ekf,
+    plot_true_vs_meas,
     plot_kalman_gain,
     plot_ekf_statistics,
 )
@@ -194,55 +196,39 @@ def main():
         accel_noise_std=accel_noise_std,
         gravity=gravity,
     )
+    encoder = WheelEncoder()
 
     # Simulate on click
     if submitted:
         x0 = np.array([x0_x, x0_xdot, np.deg2rad(x0_theta_deg), x0_thetadot])
 
         if use_ekf:
-            # Set globals used by sim.f_disc inside simulate_with_imu_and_ekf
+            # Set globals used by sim.f_disc inside simulate_with_ekf
             sim.system = system
             sim.dt = float(dt)
-            (
-                time,
-                state_hist,
-                est_hist,
-                theta_t,
-                theta_m,
-                omega_t,
-                omega_m,
-                acc_t,
-                acc_m,
-                u_hist,
-                stats,
-            ) = sim.simulate_with_imu_and_ekf(
+            results = sim.simulate_with_ekf(
                 system,
                 imu,
+                encoder,
                 x0,
                 float(T),
                 float(dt),
                 controller=controller,
             )
         else:
-            (
-                time,
-                state_hist,
-                est_hist,
-                theta_t,
-                theta_m,
-                omega_t,
-                omega_m,
-                acc_t,
-                acc_m,
-                u_hist,
-            ) = sim.simulate_with_imu(
+            results = sim.simulate_with_imu(
                 system,
                 imu,
+                encoder,
                 x0,
                 float(T),
                 float(dt),
                 controller=controller,
             )
+
+        time = results["time"]
+        state_hist = results["x_true"]
+        est_hist = results["x_meas"]
 
         with st.spinner("Building animation..."):
             anim_html = build_animation_html(time, state_hist, L, state_est_history=est_hist)
@@ -250,44 +236,20 @@ def main():
         st_html(anim_html, height=420)
 
         if use_ekf:
-            st.subheader("EKF vs Truth")
-            fig1 = plot_imu_ekf_vs_truth(
-                time=time,
-                system=system,
-                imu=imu,
-                x_true=state_hist,
-                x_ekf=est_hist,
-                theta_gyro=theta_m,
-                omega_meas=omega_m,
-                acc_true_body=acc_t,
-                acc_meas=acc_m,
-                u_hist=u_hist,
-                return_fig=True,
-            )
+            st.subheader("EKF vs IMU-only")
+            fig1 = plot_imu_vs_ekf(system=system, imu=imu, results=results, return_fig=True)
             st.pyplot(fig1)
 
             st.subheader("EKF Error Overlay")
-            fig2 = plot_imu_ekf_error_overlay(
-                time=time,
-                system=system,
-                imu=imu,
-                x_true=state_hist,
-                x_ekf=est_hist,
-                theta_gyro=theta_m,
-                omega_meas=omega_m,
-                acc_true_body=acc_t,
-                acc_meas=acc_m,
-                u_hist=u_hist,
-                return_fig=True,
-            )
+            fig2 = plot_imu_ekf_errors(results=results, return_fig=True)
             st.pyplot(fig2)
 
             st.subheader("Kalman Gain")
             state_labels = ["x", "x_dot", "theta", "theta_dot", "b_g", "b_ax", "b_ay"]
-            meas_labels = ["omega", "acc_x", "acc_y"]
+            meas_labels = ["x", "x_dot", "omega", "acc_x", "acc_y"]
             fig3 = plot_kalman_gain(
                 time=time,
-                K_hist=stats["K_hist"],
+                K_hist=results["K"],
                 meas_labels=meas_labels,
                 state_labels=state_labels,
                 return_fig=True,
@@ -297,12 +259,22 @@ def main():
             st.subheader("EKF Covariance Diagonal")
             fig4 = plot_ekf_statistics(
                 time=time,
-                P_diag=stats["P_diag_hist"],
+                P_diag=results["P"],
                 meas_labels=meas_labels,
                 state_labels=state_labels,
                 return_fig=True,
             )
             st.pyplot(fig4)
+        else:
+            st.subheader("IMU-only vs Truth")
+            fig = plot_true_vs_meas(
+                time=time,
+                x_true=state_hist,
+                x_meas=est_hist,
+                u=results["u"],
+                return_fig=True,
+            )
+            st.pyplot(fig)
 
 
 if __name__ == "__main__":
