@@ -39,17 +39,19 @@ Reference for the gyroscope and accelerometer [model](https://arxiv.org/pdf/2307
 #### Gyro Model
 - Measures the angular velocity of the pendulum tip.
 ```math
-\tilde{\omega}_k = \frac{\theta_{k+1} - \theta_k}{\Delta t}+b_g+\eta_g
+\tilde{\omega}_k = \dot{\theta}_k + b_{g,k} + \eta_g
 ```
-- $\omega$ is the measured angular velocity from the true velocity with bias and zero-mean additive Gaussian noise $\eta_g$.
+- The measured angular rate is the true angular rate plus a (slowly varying) bias and zero-mean additive Gaussian noise $\eta_g$.
+- The bias is modeled as a random walk: $b_{g,k+1} = b_{g,k} + \eta_{bg}$.
 
 #### Accelerometers
 - Measures the linear acceleration along the $x-y$ plane.
 ```math
-\tilde{a_k}=R(\theta_k^T)(a^W_k-g^w)+b_{a}+\eta_{a}
+\tilde{\mathbf{a}}_k = R(\theta_k)^\top(\mathbf{a}^W_k-\mathbf{g}^W)+\mathbf{b}_{a,k}+\eta_{a}
 ```
-- Where gravity $g^w=[0,-g]^T$
+- Where gravity $\mathbf{g}^W=[0,-g]^T$
 - $R(\theta_k)$ is the 2D cartesian rotation matrix.
+- The accelerometer bias follows a random walk: $\mathbf{b}_{a,k+1}=\mathbf{b}_{a,k}+\eta_{ba}$.
 - where
 ```math
 \mathbf{a}^W_k=\frac{\mathbf{v}_{k+1} - \mathbf{v}_k}{\Delta t}
