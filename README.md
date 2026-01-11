@@ -6,7 +6,7 @@
 ## Motivation
 In another project [Butler-Bot](https://github.com/GitM3/butler-bot) a bottle catching robot was implemented. Next I investigate how to balance the bottle if the user is especially tipsy! 
 
-Bottle balancing is often modeled by an inverted pendulum and practically implemented using IMU, but they tend to be noisy and the non-linear dynamics of the system make it suitable for robust estimation using an Extended Kalman Filter. The goal is to keep the pendulum upright!
+Bottle balancing is often modeled by an inverted pendulum and practically implemented using IMU, but IMUs tend to be noisy, have accumulating error drift and the non-linear dynamics of the system make it suitable for robust estimation using an Extended Kalman Filter. The goal is to keep the pendulum upright!
 ## Overview and Results
 Implemented:
 1) IMU model
